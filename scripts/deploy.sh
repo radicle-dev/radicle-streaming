@@ -85,7 +85,7 @@ ffffffffffffffffffffffffffe0908116603f0116810190838211818310171561059b5761059b61
 }
 
 drips_deployer() {
-    local GET_DEPLOYED="getDeployed(address deployer, bytes32 salt)(address deployed))"
+    local GET_DEPLOYED="getDeployed(address deployer, bytes32 salt)(address deployed)"
     local SALT="$(cast format-bytes32-string "$DRIPS_DEPLOYER_SALT")"
     cast call "$CREATE3_FACTORY" "$GET_DEPLOYED" "$WALLET" "$SALT"
 }
@@ -118,8 +118,8 @@ deploy_modules() {
             "$DRIPS_DEPLOYER" "$IMMUTABLE_SPLITS_DRIVER_ADMIN"
         )]"
     MODULE_INIT_CODES_3="[$(
-        create_module RepoDriver address,address,address,bytes32,uint96 \
-            "$DRIPS_DEPLOYER" "$REPO_DRIVER_ADMIN" "$REPO_DRIVER_OPERATOR" \
+        create_module RepoDriver address,address,bytes32,uint96 \
+            "$DRIPS_DEPLOYER" "$REPO_DRIVER_ADMIN" \
             $(cast format-bytes32-string "$REPO_DRIVER_JOB_ID") "$REPO_DRIVER_FEE"
         )]"
     MODULE_INIT_CODES_4="[]"
@@ -204,6 +204,12 @@ main() {
     # Set up the defaults
     if [ $(cast chain-id) == 11155111 ]; then
         CHAIN=sepolia
+    elif [ $(cast chain-id) == 11155420 ]; then
+        CHAIN=optimism-sepolia
+    elif [ $(cast chain-id) == 80002 ]; then
+        CHAIN=amoy
+    elif [ $(cast chain-id) == 84532 ]; then
+        CHAIN=base-sepolia
     else
         CHAIN="$(cast chain)"
     fi
@@ -218,7 +224,6 @@ main() {
         cast to-check-sum-address "${IMMUTABLE_SPLITS_DRIVER_ADMIN:-$ADMIN}")"
     REPO_DRIVER_ADMIN="$(cast to-check-sum-address "${REPO_DRIVER_ADMIN:-$ADMIN}")"
     DRIPS_CYCLE_SECS="${DRIPS_CYCLE_SECS:-$(( 7 * 24 * 60 * 60 ))}" # 1 week
-    REPO_DRIVER_OPERATOR="${REPO_DRIVER_OPERATOR:-$(cast address-zero)}"
     REPO_DRIVER_JOB_ID="${REPO_DRIVER_JOB_ID:-00000000000000000000000000000000}"
     REPO_DRIVER_FEE="${REPO_DRIVER_FEE:-0}"
 
@@ -262,7 +267,6 @@ main() {
     echo "AddressDriver admin:           $ADDRESS_DRIVER_ADMIN"
     echo "NFTDriver admin:               $NFT_DRIVER_ADMIN"
     echo "ImmutableSplitsDriver admin:   $IMMUTABLE_SPLITS_DRIVER_ADMIN"
-    echo "RepoDriver AnyApi operator:    $REPO_DRIVER_OPERATOR"
     echo "RepoDriver AnyApi job ID:      $REPO_DRIVER_JOB_ID"
     echo "RepoDriver AnyApi default fee: $REPO_DRIVER_FEE"
     echo "RepoDriver admin:              $REPO_DRIVER_ADMIN"
@@ -299,9 +303,7 @@ main() {
 
     print_deployment_json
 
-    if [ -n "$ETHERSCAN_API_KEY" ] || [ -n "$VERIFY_SOURCIFY" ] || [ -n "$VERIFY_BLOCKSCOUT" ]; then
-        scripts/verify.sh "$DRIPS_DEPLOYER"
-    fi
+    scripts/verify.sh "$DRIPS_DEPLOYER"
 }
 
 main "$@"

@@ -10,6 +10,7 @@ import {ERC677ReceiverInterface} from "chainlink/interfaces/ERC677ReceiverInterf
 import {LinkTokenInterface} from "chainlink/interfaces/LinkTokenInterface.sol";
 import {OperatorInterface} from "chainlink/interfaces/OperatorInterface.sol";
 import {BufferChainlink, CBORChainlink} from "chainlink/Chainlink.sol";
+import {ERC20} from "openzeppelin-contracts/token/ERC20/ERC20.sol";
 import {ShortString, ShortStrings} from "openzeppelin-contracts/utils/ShortStrings.sol";
 
 /// @notice The supported forges where repositories are stored.
@@ -96,9 +97,21 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
         } else if (block.chainid == 5) {
             chainName = "goerli";
             _linkToken = 0x326C977E6efc84E512bB9C30f76E30c160eD06FB;
+        } else if (block.chainid == 10) {
+            chainName = "optimism";
+            _linkToken = 0xa4F28592E8B9102921707F0Da3833AF36e179587; // not deployed by Chainlink
         } else if (block.chainid == 11155111) {
             chainName = "sepolia";
             _linkToken = 0x779877A7B0D9E8603169DdbD7836e478b4624789;
+        } else if (block.chainid == 11155420) {
+            chainName = "optimism-sepolia";
+            _linkToken = 0xE4aB69C077896252FAFBD49EFD26B5D171A32410;
+        } else if (block.chainid == 80002) {
+            chainName = "amoy";
+            _linkToken = 0x2974d8898C9EAE3aad7828C93d485633DfD6e358; // not deployed by Chainlink
+        } else if (block.chainid == 84532) {
+            chainName = "base-sepolia";
+            _linkToken = 0xE4aB69C077896252FAFBD49EFD26B5D171A32410;
         } else {
             chainName = "other";
             _linkToken = address(bytes20("dummy link token"));
@@ -556,5 +569,72 @@ contract RepoDriver is ERC677ReceiverInterface, DriverTransferUtils, Managed {
         assembly {
             storageRef.slot := slot
         }
+    }
+}
+
+contract FakeOperator is ERC677ReceiverInterface {
+    uint256 public nonce;
+    RepoDriver public immutable repoDriver;
+    uint256 public immutable fee;
+    address public immutable linkToken;
+
+    constructor(RepoDriver repoDriver_, uint256 fee_) {
+        repoDriver = repoDriver_;
+        fee = fee_;
+        address _linkToken;
+        if (block.chainid == 10) {
+            // optimism
+            _linkToken = 0xa4F28592E8B9102921707F0Da3833AF36e179587;
+        } else if (block.chainid == 11155420) {
+            // optimism-sepolia
+            _linkToken = 0xE4aB69C077896252FAFBD49EFD26B5D171A32410;
+        } else if (block.chainid == 80002) {
+            // amoy
+            _linkToken = 0x2974d8898C9EAE3aad7828C93d485633DfD6e358; // not deployed by Chainlink
+        } else if (block.chainid == 84532) {
+            // base-sepolia
+            _linkToken = 0xE4aB69C077896252FAFBD49EFD26B5D171A32410;
+        } else {
+            // other
+            _linkToken = address(bytes20("dummy link token"));
+        }
+        linkToken = _linkToken;
+    }
+
+    function onTokenTransfer(address sender, uint256 amount, bytes calldata data) public {
+        require(msg.sender == linkToken, "Callable only by the Link token");
+        require(sender == address(repoDriver), "Transfer not from the RepoDriver");
+        require(amount >= fee, "Amount not enough for the fee");
+        (,,,, nonce,,) = abi.decode(
+            data[4:],
+            (
+                address, // sender
+                uint256, // payment
+                bytes32, // specId
+                bytes4, // callbackFunctionId
+                uint256, // nonce
+                uint256, // dataVersion
+                bytes // data
+            )
+        );
+    }
+
+    function fulfillOracleRequest(bytes calldata owner) public {
+        bytes32 requestId = keccak256(abi.encodePacked(repoDriver, nonce));
+        repoDriver.updateOwnerByAnyApi(requestId, owner);
+    }
+}
+
+contract TestLink is ERC20("Test Link", "LINK") {
+    function mint1(address receiver) public {
+        _mint(receiver, 10 ** decimals());
+    }
+
+    function transferAndCall(address to, uint256 value, bytes calldata data)
+        public
+        returns (bool success)
+    {
+        success = transfer(to, value);
+        ERC677ReceiverInterface(to).onTokenTransfer(msg.sender, value, data);
     }
 }

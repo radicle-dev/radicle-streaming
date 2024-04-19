@@ -228,7 +228,7 @@ contract RepoDriverTest is Test {
                             2,
                             buffer.buf
                         )
-                        )
+                    )
                 )
             ),
             ""

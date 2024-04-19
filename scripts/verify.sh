@@ -61,6 +61,9 @@ verify_module_contract() {
 
 # Args: contract address, contract path, ABI-encoded constructor args
 verify() {
+    mkdir -p "verify_$CHAIN"
+    forge verify-contract "$(cast address-zero)" "$2" --constructor-args "$3" \
+        --show-standard-json-input > "verify_$CHAIN/$1.json"
     if [ -n "$ETHERSCAN_API_KEY" ]; then
         verify_single "$1" "$2" "$3" etherscan
     fi
@@ -92,15 +95,18 @@ main() {
         echo "Error: DripsDeployer not deployed".
         exit 1
     fi
-    if [ $(cast chain-id) == 11155111 ]; then
+    if [ $(cast chain-id) == 10 ]; then
+        CHAIN=optimism
+    elif [ $(cast chain-id) == 11155111 ]; then
         CHAIN=sepolia
+    elif [ $(cast chain-id) == 11155420 ]; then
+        CHAIN=optimism-sepolia
+    elif [ $(cast chain-id) == 80002 ]; then
+        CHAIN=amoy
+    elif [ $(cast chain-id) == 84532 ]; then
+        CHAIN=base-sepolia
     else
         CHAIN="$(cast chain)"
-    fi
-    if [ -z "$ETHERSCAN_API_KEY" ] && [ -z "$VERIFY_SOURCIFY" ] && [ -z "$VERIFY_BLOCKSCOUT" ]; then
-        echo "Error: none of 'ETHERSCAN_API_KEY', 'VERIFY_SOURCIFY' or 'VERIFY_BLOCKSCOUT'" \
-            "variables set, see README.md"
-        exit 1
     fi
 
     print_title "Installing dependencies"
@@ -113,6 +119,7 @@ main() {
     verify_proxy_deployer_module NFTDriver
     verify_proxy_deployer_module ImmutableSplitsDriver
     verify_proxy_deployer_module RepoDriver
+    verify_module_contract FakeOperator "$MODULE_ADDR" operator "src/RepoDriver.sol:FakeOperator"
 }
 
 main "$@"

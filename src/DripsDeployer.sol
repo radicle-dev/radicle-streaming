@@ -7,7 +7,7 @@ import {Drips} from "./Drips.sol";
 import {ImmutableSplitsDriver} from "./ImmutableSplitsDriver.sol";
 import {Managed, ManagedProxy} from "./Managed.sol";
 import {NFTDriver} from "./NFTDriver.sol";
-import {OperatorInterface, RepoDriver} from "./RepoDriver.sol";
+import {FakeOperator, OperatorInterface, RepoDriver} from "./RepoDriver.sol";
 import {Ownable2Step} from "openzeppelin-contracts/access/Ownable2Step.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 
@@ -288,26 +288,30 @@ contract RepoDriverModule is CallerDependentModule, DriverModule(3) {
     uint96 public immutable defaultFee;
 
     function args() public view override returns (bytes memory) {
-        return abi.encode(dripsDeployer, proxyAdmin, operator, jobId, defaultFee);
+        return abi.encode(dripsDeployer, proxyAdmin, jobId, defaultFee);
     }
 
     constructor(
         DripsDeployer dripsDeployer_,
         address proxyAdmin_,
-        OperatorInterface operator_,
         bytes32 jobId_,
         uint96 defaultFee_
     ) BaseModule(dripsDeployer_, "RepoDriver") {
-        operator = operator_;
         jobId = jobId_;
         defaultFee = defaultFee_;
         // slither-disable-next-line too-many-digits
         _deployProxy(proxyAdmin_, type(RepoDriver).creationCode);
+        FakeOperator fakeOperator = new FakeOperator(repoDriver(), defaultFee);
+        operator = OperatorInterface(address(fakeOperator));
         repoDriver().initializeAnyApiOperator(operator, jobId, defaultFee);
     }
 
     function logicArgs() public view override returns (bytes memory) {
         return abi.encode(_dripsModule().drips(), _callerModule().caller(), driverId);
+    }
+
+    function operatorArgs() public view returns (bytes memory) {
+        return abi.encode(repoDriver(), defaultFee);
     }
 
     function repoDriver() public view returns (RepoDriver) {
