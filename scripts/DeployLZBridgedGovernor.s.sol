@@ -12,7 +12,7 @@ import {
 import {SetConfigParam} from "layer-zero-v2/protocol/contracts/interfaces/IMessageLibManager.sol";
 import {Constant} from "layer-zero-v2/messagelib/test/util/Constant.sol";
 import {Strings} from "openzeppelin-contracts/utils/Strings.sol";
-import {LZBridgedGovernor, BridgedGovernorProxy, Call} from "src/BridgedGovernor.sol";
+import {LZBridgedGovernor, GovernorProxy, Call} from "src/BridgedGovernor.sol";
 
 // Taken from layer-zero-v2/messagelib/contracts/uln/UlnBase.sol
 struct UlnConfig {
@@ -152,7 +152,7 @@ contract DeployToBscTestnet is Script {
         vm.startBroadcast();
         address governorLogic =
             address(new LZBridgedGovernor(BSC_TESTNET_ENDPOINT, SEPOLIA_EID, owner));
-        address governorProxy = address(new BridgedGovernorProxy(governorLogic, calls));
+        address governorProxy = address(new GovernorProxy(governorLogic, calls));
         vm.stopBroadcast();
 
         require(governorProxy == governor, "Invalid deployment address");

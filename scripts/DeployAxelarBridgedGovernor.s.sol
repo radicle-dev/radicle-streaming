@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {console, Script} from "forge-std/Script.sol";
-import {AxelarBridgedGovernor, BridgedGovernorProxy, Call} from "src/BridgedGovernor.sol";
+import {AxelarBridgedGovernor, GovernorProxy, Call} from "src/BridgedGovernor.sol";
 import {IAxelarGasService} from "axelar/interfaces/IAxelarGasService.sol";
 import {IAxelarGMPGateway} from "axelar/interfaces/IAxelarGMPGateway.sol";
 import {AddressToString} from "axelar/libs/AddressString.sol";
@@ -27,12 +27,11 @@ IAxelarGMPGateway constant BSC_TESTNET_GATEWAY =
 //         vm.startBroadcast();
 //         AxelarBridgedGovernor logic =
 //             new AxelarBridgedGovernor(BSC_TESTNET_GATEWAY, SEPOLIA_CHAIN_NAME, owner);
-//         BridgedGovernorProxy governor = new BridgedGovernorProxy(address(logic), new Call[](0));
+//         GovernorProxy governor = new GovernorProxy(address(logic), new Call[](0));
 //         vm.stopBroadcast();
 //         console.log("Deployed AxelarBridgedGovernor:", address(governor));
 //     }
 // }
-
 
 // Gateway and ddresses taken from https://docs.axelar.dev/resources/contract-addresses/testnet
 
@@ -64,14 +63,14 @@ contract DeployGovernor is Script {
 
         vm.startBroadcast();
         AxelarBridgedGovernor logic = new AxelarBridgedGovernor(gateway, sourceChain, owner);
-        BridgedGovernorProxy governor = new BridgedGovernorProxy(address(logic), new Call[](0));
+        GovernorProxy governor = new GovernorProxy(address(logic), new Call[](0));
         vm.stopBroadcast();
         console.log("Deployed AxelarBridgedGovernor:", address(governor));
     }
 }
 
 contract ContractCaller {
-    address  public immutable owner;
+    address public immutable owner;
     IAxelarGMPGateway public immutable gateway;
     IAxelarGasService public immutable gasService;
 
@@ -85,12 +84,12 @@ contract ContractCaller {
     }
 
     function setRecipient(string calldata destinationChain_, address recipient_) public {
-            require(msg.sender == owner, "Only owner");
-            destinationChain = destinationChain_;
-            recipient = recipient_;
+        require(msg.sender == owner, "Only owner");
+        destinationChain = destinationChain_;
+        recipient = recipient_;
     }
 
-    function callContract(bytes calldata payload) payable public {
+    function callContract(bytes calldata payload) public payable {
         require(msg.sender == owner, "Only owner");
         string memory recipient_ = AddressToString.toString(recipient);
         if (msg.value > 0) {
@@ -102,11 +101,10 @@ contract ContractCaller {
     }
 }
 
-
 contract ContractCall is Script {
     function run() public {
         ContractCaller caller = ContractCaller(vm.envAddress("CALLER"));
-        uint256 fee = vm.envOr("FEE", uint(0));
+        uint256 fee = vm.envOr("FEE", uint256(0));
         uint256 nonce = vm.envUint("NONCE");
 
         Call[] memory calls = new Call[](1);

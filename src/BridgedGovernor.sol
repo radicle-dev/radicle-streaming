@@ -24,14 +24,17 @@ struct Call {
     uint256 value;
 }
 
-/// @notice Run the list of calls.
+/// @notice Execute the list of calls.
 /// If any of the calls reverts, reverts bubbling the error.
-/// All the targets must be smart contracts, calling an EOA will revert.
-/// @param calls The list of calls to run.
-function runCalls(Call[] memory calls) {
+/// @param calls The list of calls to execute.
+function executeCalls(Call[] memory calls) {
     for (uint256 i = 0; i < calls.length; i++) {
         Call memory call = calls[i];
-        Address.functionCallWithValue(call.target, call.data, call.value);
+        if (call.data.length > 0 || Address.isContract(call.target)) {
+            Address.functionCallWithValue(call.target, call.data, call.value);
+        } else {
+            Address.sendValue(payable(call.target), call.value);
+        }
     }
 }
 
@@ -44,13 +47,22 @@ abstract contract Governor is UUPSUpgradeable {
     /// @param nonce The nonce of the message.
     event MessageExecuted(uint256 nonce);
 
+    receive() external payable {}
+
+    /// @notice Returns the current implementation address.
+    /// @return implementation_ The implementation address.
+    function implementation() public view returns (address implementation_) {
+        return _getImplementation();
+    }
+
     /// @notice Executes the message.
     /// @param nonce The message nonce, must be equal to `nextMessageNonce`.
-    /// @param calls The list of calls to run.
+    /// @param calls The list of calls to execute.
     function _executeMessage(uint256 nonce, Call[] memory calls) internal {
         require(nonce == nextMessageNonce, "Invalid message nonce");
+        executeCalls(calls);
+        require(nonce == nextMessageNonce, "Message execution reentrancy");
         nextMessageNonce++;
-        runCalls(calls);
         emit MessageExecuted(nonce);
     }
 
@@ -59,7 +71,7 @@ abstract contract Governor is UUPSUpgradeable {
     }
 }
 
-/// @notice The governor running calls received from its owner on another chain using LayerZero v2.
+/// @notice The governor executing messages from its owner on another chain using LayerZero v2.
 contract LZBridgedGovernor is Governor, ILayerZeroReceiver {
     /// @notice The LayerZero v2 endpoint that is allowed to execute received messages.
     address public immutable endpoint;
@@ -75,7 +87,7 @@ contract LZBridgedGovernor is Governor, ILayerZeroReceiver {
         uint256 nonce;
         /// @notice The minimum accepted `msg.value` passed with the message.
         uint256 value;
-        /// @notice The list of calls to run.
+        /// @notice The list of calls to execute.
         Call[] calls;
     }
 
@@ -141,7 +153,7 @@ contract LZBridgedGovernor is Governor, ILayerZeroReceiver {
     }
 }
 
-/// @notice The governor running calls received from its owner on another chain using Axelar.
+/// @notice The governor executing messages from its owner on another chain using Axelar.
 contract AxelarBridgedGovernor is Governor, IAxelarGMPExecutable {
     /// @notice The Axelar gateway used by this contract.
     IAxelarGMPGateway public immutable override gateway;
@@ -150,18 +162,18 @@ contract AxelarBridgedGovernor is Governor, IAxelarGMPExecutable {
     /// @notice The owner address which is allowed to send messages.
     address public immutable owner;
 
-    /// @notice The name of the chain from which the owner is allowed to send messages.
-    /// @return ownerChain_ The name of the chain.
-    function ownerChain() public view returns (string memory ownerChain_) {
-        return ShortStrings.toString(_ownerChain);
-    }
-
     /// @notice The message passed over the bridge to the governor to execute.
     struct Message {
         /// @notice The message nonce, must be equal to `nextMessageNonce` when executed.
         uint256 nonce;
-        /// @notice The list of calls to run.
+        /// @notice The list of calls to execute.
         Call[] calls;
+    }
+
+    /// @notice The name of the chain from which the owner is allowed to send messages.
+    /// @return ownerChain_ The name of the chain.
+    function ownerChain() public view onlyProxy returns (string memory ownerChain_) {
+        return ShortStrings.toString(_ownerChain);
     }
 
     /// @param gateway_ The Axelar gateway used by this contract.
@@ -185,12 +197,12 @@ contract AxelarBridgedGovernor is Governor, IAxelarGMPExecutable {
         string calldata sourceChain,
         string calldata sender,
         bytes calldata payload
-    ) public {
+    ) public onlyProxy {
+        require(Strings.equal(sourceChain, ownerChain()), "Invalid message source chain");
+        require(StringToAddress.toAddress(sender) == owner, "Invalid message sender");
         if (!gateway.validateContractCall(commandId, sourceChain, sender, keccak256(payload))) {
             revert NotApprovedByGateway();
         }
-        require(Strings.equal(sourceChain, ownerChain()), "Invalid message source chain");
-        require(StringToAddress.toAddress(sender) == owner, "Invalid message sender");
 
         Message memory message = abi.decode(payload, (Message));
         _executeMessage(message.nonce, message.calls);
@@ -198,11 +210,11 @@ contract AxelarBridgedGovernor is Governor, IAxelarGMPExecutable {
 }
 
 /// @notice The specialized proxy for `BridgedGovernor`.
-contract BridgedGovernorProxy is ERC1967Proxy {
+contract GovernorProxy is ERC1967Proxy {
     /// @param logic The initial address of the logic for the proxy.
-    /// @param calls The list of `Call`s to run while executing the constructor.
+    /// @param calls The list of `Call`s to execute while running the constructor.
     /// It should at least set up the initial LayerZero v2 configuration.
-    constructor(address logic, Call[] memory calls) ERC1967Proxy(logic, "") {
-        runCalls(calls);
+    constructor(address logic, Call[] memory calls) payable ERC1967Proxy(logic, "") {
+        executeCalls(calls);
     }
 }
