@@ -4,7 +4,7 @@ evm_version = 'shanghai'
 optimizer_runs = 7_700
 verbosity = 1
 fuzz_runs = 5
-script = 'scripts'
+fs_permissions = [{ access = "read-write", path = "./"}]
 [fmt]
 line_length = 100
 [fuzz]
