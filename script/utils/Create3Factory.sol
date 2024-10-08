@@ -1,17 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.20;
 
-import {console, Script} from "forge-std/Script.sol";
+import {console} from "forge-std/Script.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
-import {ICreate3Factory} from "script/DripsDeployer.sol";
 
-/// @dev Deployed by Safe, taken from https://github.com/safe-global/safe-singleton-factory.
-ICreate3Factory constant CREATE3_FACTORY =
-    ICreate3Factory(0xe9BE461efaB6f9079741da3b180249F81e66A461);
+/// @dev The singleton factory for deterministic deployment.
+/// Deployed by Safe, addresses taken from https://github.com/safe-global/safe-singleton-factory.
+address constant SINGLETON_FACTORY = 0x914d7Fec6aaC8cd542e72Bca78B30650d45643d7;
 
-contract DeployCreate3Factory is Script {
-    /// @notice
-    address internal immutable singletonFactory = 0x914d7Fec6aaC8cd542e72Bca78B30650d45643d7;
+function deployCreate3Factory() returns (ICreate3Factory deployment) {
+    deployment = ICreate3Factory(0xe9BE461efaB6f9079741da3b180249F81e66A461);
+    if (Address.isContract(address(deployment))) {
+        console.log("Create3Factory already deployed");
+        return deployment;
+    }
 
     /// @notice The creation code of Create3Factory.
     /// It's reused verbatim to keep it byte-for-byte identical across all deployments and chains,
@@ -20,7 +22,7 @@ contract DeployCreate3Factory is Script {
     /// Taken from https://github.com/ZeframLou/create3-factory,
     /// originally deployed on Ethereum as `0x9fBB3DF7C40Da2e5A0dE984fFE2CCB7C47cd0ABf`
     /// in transaction `0xb05de371a18fc4f02753b34a689939cee69b93a043b926732043780959b7c4e3`.
-    bytes constant CREATE3_FACTORY_CREATION_CODE =
+    bytes memory creationCode =
         hex"608060405234801561001057600080fd5b5061063b806100206000396000f3fe6080604052600436106100"
         hex"295760003560e01c806350f1c4641461002e578063cdcb760a14610077575b600080fd5b34801561003a57"
         hex"600080fd5b5061004e610049366004610489565b61008a565b60405173ffffffffffffffffffffffffffff"
@@ -59,16 +61,34 @@ contract DeployCreate3Factory is Script {
         hex"6020848301015280955050505050509250929050565b6000825160005b818110156105f757602081860181"
         hex"015185830152016105dd565b50600092019182525091905056fea2646970667358221220fd377c185926b3"
         hex"110b7e8a544f897646caf36a0e82b2629de851045e2a5f937764736f6c63430008100033";
+    bytes32 salt = 0;
+    require(Address.isContract(SINGLETON_FACTORY), "Singleton factory not deployed");
+    bytes memory addr = Address.functionCall(
+        SINGLETON_FACTORY, bytes.concat(salt, creationCode), "Create3Factory deployment failed"
+    );
+    require(address(bytes20(addr)) == address(deployment), "Invalid Create3Factory address");
+}
 
-    function run() public {
-        if (Address.isContract(address(CREATE3_FACTORY))) {
-            console.log("Create3Factory already deployed");
-            return;
-        }
-        require(Address.isContract(singletonFactory), "Singleton factory not deployed");
-        bytes32 salt = 0;
-        bytes memory data = bytes.concat(salt, CREATE3_FACTORY_CREATION_CODE);
-        vm.broadcast();
-        Address.functionCall(singletonFactory, data, "Create3Factory deployment failed");
-    }
+/// @title Factory for deploying contracts to deterministic addresses via CREATE3.
+/// @author zefram.eth, taken from https://github.com/ZeframLou/create3-factory.
+/// @notice Enables deploying contracts using CREATE3.
+/// Each deployer (`msg.sender`) has its own namespace for deployed addresses.
+interface ICreate3Factory {
+    /// @notice Deploys a contract using CREATE3.
+    /// @dev The provided salt is hashed together with msg.sender to generate the final salt.
+    /// @param salt The deployer-specific salt for determining the deployed contract's address.
+    /// @param creationCode The creation code of the contract to deploy.
+    /// @return deployed The address of the deployed contract.
+    function deploy(bytes32 salt, bytes memory creationCode)
+        external
+        payable
+        returns (address deployed);
+
+    /// @notice Predicts the address of a deployed contract.
+    /// @dev The provided salt is hashed together
+    /// with the deployer address to generate the final salt.
+    /// @param deployer The deployer account that will call `deploy()`.
+    /// @param salt The deployer-specific salt for determining the deployed contract's address.
+    /// @return deployed The address of the contract that will be deployed.
+    function getDeployed(address deployer, bytes32 salt) external view returns (address deployed);
 }

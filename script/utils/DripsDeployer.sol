@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.20;
 
+import {ICreate3Factory} from "script/utils/Create3Factory.sol";
 import {AddressDriver} from "src/AddressDriver.sol";
 import {
     AxelarBridgedGovernor,
@@ -28,12 +29,13 @@ struct ModuleData {
     uint256 value;
 }
 
-function dripsDeployerCreationCode(ICreate3Factory create3Factory, address owner)
-    pure
-    returns (bytes memory creationCode)
+function deployDripsDeployer(ICreate3Factory create3Factory, bytes32 salt, address owner)
+    returns (DripsDeployer deployment)
 {
     bytes memory args = abi.encode(create3Factory, owner);
-    return abi.encodePacked(type(DripsDeployer).creationCode, args);
+    bytes memory creationCode = abi.encodePacked(type(DripsDeployer).creationCode, args);
+    address dripsDeployer = create3Factory.deploy(salt, creationCode);
+    return DripsDeployer(payable(dripsDeployer));
 }
 
 contract DripsDeployer is Ownable2Step {
@@ -57,30 +59,6 @@ contract DripsDeployer is Ownable2Step {
     function module(bytes32 salt) public view returns (address addr) {
         return create3Factory.getDeployed(address(this), salt);
     }
-}
-
-/// @title Factory for deploying contracts to deterministic addresses via CREATE3.
-/// @author zefram.eth, taken from https://github.com/ZeframLou/create3-factory.
-/// @notice Enables deploying contracts using CREATE3.
-/// Each deployer (`msg.sender`) has its own namespace for deployed addresses.
-interface ICreate3Factory {
-    /// @notice Deploys a contract using CREATE3.
-    /// @dev The provided salt is hashed together with msg.sender to generate the final salt.
-    /// @param salt The deployer-specific salt for determining the deployed contract's address.
-    /// @param creationCode The creation code of the contract to deploy.
-    /// @return deployed The address of the deployed contract.
-    function deploy(bytes32 salt, bytes memory creationCode)
-        external
-        payable
-        returns (address deployed);
-
-    /// @notice Predicts the address of a deployed contract.
-    /// @dev The provided salt is hashed together
-    /// with the deployer address to generate the final salt.
-    /// @param deployer The deployer account that will call `deploy()`.
-    /// @param salt The deployer-specific salt for determining the deployed contract's address.
-    /// @return deployed The address of the contract that will be deployed.
-    function getDeployed(address deployer, bytes32 salt) external view returns (address deployed);
 }
 
 function create3ManagedProxy(
@@ -112,9 +90,19 @@ function create3(
     return dripsDeployer.create3Factory().deploy(salt, abi.encodePacked(creationCode, args));
 }
 
-function findModule(DripsDeployer dripsDeployer, bytes32 salt) view returns (address module) {
+function isModuleDeployed(DripsDeployer dripsDeployer, bytes32 salt) view returns (bool yes) {
+    address module = dripsDeployer.module(salt);
+    return Address.isContract(module);
+}
+
+function tryFindModule(DripsDeployer dripsDeployer, bytes32 salt) view returns (address module) {
     module = dripsDeployer.module(salt);
-    if (!Address.isContract(module)) {
+    if (!Address.isContract(module)) module = address(0);
+}
+
+function findModule(DripsDeployer dripsDeployer, bytes32 salt) view returns (address module) {
+    module = tryFindModule(dripsDeployer, salt);
+    if (module == address(0)) {
         // Cast the salt to a string
         uint256 length = 0;
         while (length < 32 && salt[length] != 0) length++;
@@ -220,11 +208,11 @@ function dripsModule(DripsDeployer dripsDeployer) view returns (DripsModule) {
     return DripsModule(findModule(dripsDeployer, DRIPS_MODULE_SALT));
 }
 
-function dripsModuleData(DripsDeployer dripsDeployer, uint32 dripsCycleSecs, address admin)
+function dripsModuleData(DripsDeployer dripsDeployer, address admin, uint32 cycleSecs)
     pure
     returns (ModuleData memory)
 {
-    bytes memory args = abi.encode(dripsDeployer, dripsCycleSecs, admin);
+    bytes memory args = abi.encode(dripsDeployer, admin, cycleSecs);
     return ModuleData({
         salt: DRIPS_MODULE_SALT,
         initCode: abi.encodePacked(type(DripsModule).creationCode, args),
@@ -235,10 +223,10 @@ function dripsModuleData(DripsDeployer dripsDeployer, uint32 dripsCycleSecs, add
 contract DripsModule is Module {
     Drips public immutable drips;
 
-    constructor(DripsDeployer dripsDeployer, uint32 dripsCycleSecs, address admin)
+    constructor(DripsDeployer dripsDeployer, address admin, uint32 cycleSecs)
         Module(dripsDeployer, DRIPS_MODULE_SALT)
     {
-        Drips logic = new Drips(dripsCycleSecs);
+        Drips logic = new Drips(cycleSecs);
         address proxy = create3ManagedProxy(dripsDeployer, "Drips", logic, admin, "");
         drips = Drips(proxy);
         for (uint256 i = 0; i < 100; i++) {
@@ -356,10 +344,10 @@ function giversRegistryModule(DripsDeployer dripsDeployer) view returns (GiversR
 
 function giversRegistryModuleData(
     DripsDeployer dripsDeployer,
-    IWrappedNativeToken wrappedNativeToken,
-    address admin
+    address admin,
+    IWrappedNativeToken wrappedNativeToken
 ) pure returns (ModuleData memory) {
-    bytes memory args = abi.encode(dripsDeployer, wrappedNativeToken, admin);
+    bytes memory args = abi.encode(dripsDeployer, admin, wrappedNativeToken);
     return ModuleData({
         salt: GIVERS_REGISTRY_MODULE_SALT,
         initCode: abi.encodePacked(type(GiversRegistryModule).creationCode, args),
@@ -370,7 +358,7 @@ function giversRegistryModuleData(
 contract GiversRegistryModule is Module {
     GiversRegistry public immutable giversRegistry;
 
-    constructor(DripsDeployer dripsDeployer, IWrappedNativeToken wrappedNativeToken, address admin)
+    constructor(DripsDeployer dripsDeployer, address admin, IWrappedNativeToken wrappedNativeToken)
         Module(dripsDeployer, GIVERS_REGISTRY_MODULE_SALT)
     {
         AddressDriver addressDriver = addressDriverModule(dripsDeployer).addressDriver();
