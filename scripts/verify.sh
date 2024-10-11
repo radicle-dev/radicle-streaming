@@ -59,6 +59,16 @@ verify_module_contract() {
     verify "$(query "$2" "$3" address)" "$4" "$(query "$2" "$3Args" bytes)"
 }
 
+verify_dummy_gelato_automate() {
+    # Must be called right after verifying RepoDriver
+    local REPO_DRIVER="$(query "$MODULE_ADDR" "proxy" address)"
+    local GELATO_AUTOMATE="$(query "$REPO_DRIVER" gelatoAutomate address)"
+    # The real Gelato Automate contract is an ERC-1967 proxy unlike the dummy version.
+    if [ $(cast implementation "$GELATO_AUTOMATE") == $(cast address-zero) ]; then
+        verify "$GELATO_AUTOMATE" "src/RepoDriver.sol:DummyGelatoAutomate" ""
+    fi
+}
+
 # Args: contract address, contract path, ABI-encoded constructor args
 verify() {
     if [ -n "$ETHERSCAN_API_KEY" ]; then
@@ -75,7 +85,7 @@ verify() {
 # Args: contract address, contract path, ABI-encoded constructor args, verifier name
 verify_single() {
     echo "Verifying on $4"
-    forge verify-contract "$1" "$2" --chain "$CHAIN" --watch --constructor-args "$3" --verifier "$4"
+    forge verify-contract "$1" "$2" --chain "$CHAIN_ID" --watch --constructor-args "$3" --verifier "$4"
 }
 
 main() {
@@ -92,8 +102,11 @@ main() {
         echo "Error: DripsDeployer not deployed".
         exit 1
     fi
-    if [ $(cast chain-id) == 11155111 ]; then
+    CHAIN_ID="$(cast chain-id)"
+    if [ "$CHAIN_ID" == 11155111 ]; then
         CHAIN=sepolia
+    elif [ "$CHAIN_ID" == 314 ]; then
+        CHAIN=filecoin
     else
         CHAIN="$(cast chain)"
     fi
@@ -113,6 +126,7 @@ main() {
     verify_proxy_deployer_module NFTDriver
     verify_proxy_deployer_module ImmutableSplitsDriver
     verify_proxy_deployer_module RepoDriver
+    verify_dummy_gelato_automate
 }
 
 main "$@"

@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {UUPSUpgradeable} from "openzeppelin-contracts/proxy/utils/UUPSUpgradeable.sol";
 import {ERC1967Proxy} from "openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {EnumerableSet} from "openzeppelin-contracts/utils/structs/EnumerableSet.sol";
+import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {StorageSlot} from "openzeppelin-contracts/utils/StorageSlot.sol";
 
 using EnumerableSet for EnumerableSet.AddressSet;
@@ -52,6 +53,15 @@ abstract contract Managed is UUPSUpgradeable {
     /// @notice Throws if called by any caller other than the admin.
     modifier onlyAdmin() {
         require(admin() == msg.sender, "Caller not the admin");
+        _;
+    }
+
+    /// @notice Throws if called by any caller other than the admin.
+    /// May be called by anybody if delegated to from a constructor.
+    modifier onlyAdminOrConstructor() {
+        if (Address.isContract(address(this))) {
+            require(admin() == msg.sender, "Caller not the admin");
+        }
         _;
     }
 
@@ -201,7 +211,12 @@ abstract contract Managed is UUPSUpgradeable {
 
 /// @notice A generic proxy for contracts implementing `Managed`.
 contract ManagedProxy is ERC1967Proxy {
-    constructor(Managed logic, address admin) ERC1967Proxy(address(logic), new bytes(0)) {
+    /// @param logic The initial implementation address of the proxy.
+    /// @param admin The initial admin of the proxy.
+    /// @param data If non-empty, used as calldata to delegate to `logic`.
+    constructor(Managed logic, address admin, bytes memory data)
+        ERC1967Proxy(address(logic), data)
+    {
         _changeAdmin(admin);
     }
 }

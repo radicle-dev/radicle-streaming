@@ -59,6 +59,7 @@ library StreamConfigImpl {
     /// @param start_ The timestamp when streaming should start.
     /// If zero, use the timestamp when the stream is configured.
     /// @param duration_ The duration of streaming. If zero, stream until the balance runs out.
+    // slither-disable-next-line dead-code
     function create(uint32 streamId_, uint160 amtPerSec_, uint32 start_, uint32 duration_)
         internal
         pure
@@ -86,6 +87,7 @@ library StreamConfigImpl {
     }
 
     /// @notice Extracts streamId from a `StreamConfig`
+    // slither-disable-next-line dead-code
     function streamId(StreamConfig config) internal pure returns (uint32) {
         // `config` has value:
         // `streamId (32 bits) | amtPerSec (160 bits) | start (32 bits) | duration (32 bits)`

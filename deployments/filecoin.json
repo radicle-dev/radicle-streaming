@@ -1,0 +1,17 @@
+{
+    "AddressDriver": "0x04693D13826a37dDdF973Be4275546Ad978cb9EE",
+    "AxelarBridgedGovernor": "0xE9B15C572EB7Ba2E2856cc5eFaAb8fe1d0e34116",
+    "Caller": "0xd6Ab8e72dE3742d45AdF108fAa112Cd232718828",
+    "Chain ID": 314,
+    "Deployer": "0x7dCaCF417BA662840DcD2A35b67f55911815dD7e",
+    "Drips": "0xd320F59F109c618b19707ea5C5F068020eA333B3",
+    "Drips cycle seconds": 86400,
+    "GiversRegistry": "0x42c8b3dac5144511fc9Ae11D4Bc9cfF33dd88eAe",
+    "ImmutableSplitsDriver": "0x96EC722e1338f08bbd469b80394eE118a0bc6753",
+    "ModulesDeployer": "0xB1d6865994c16c12288e7DE36a3457e8a04be8E2",
+    "NFTDriver": "0x2F23217A87cAf04ae586eed7a3d689f6C48498dB",
+    "NativeTokenUnwrapper": "0x64e0d60C70e9778C2E649FfBc90259C86a6Bf396",
+    "RepoDriver": "0xe75f56B26857cAe06b455Bfc9481593Ae0FB4257",
+    "RepoDriver tasks owner": "0x6691F8fAaB86B023f09801D24E808344BEC1D314",
+    "Salt": "DripsV2Final"
+}

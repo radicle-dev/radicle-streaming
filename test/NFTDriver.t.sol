@@ -36,7 +36,7 @@ contract NFTDriverTest is Test {
 
     function setUp() public {
         Drips dripsLogic = new Drips(10);
-        drips = Drips(address(new ManagedProxy(dripsLogic, address(this))));
+        drips = Drips(address(new ManagedProxy(dripsLogic, address(this), "")));
 
         caller = new Caller();
 
@@ -45,7 +45,7 @@ contract NFTDriverTest is Test {
         drips.registerDriver(address(1));
         uint32 driverId = drips.registerDriver(address(this));
         NFTDriver driverLogic = new NFTDriver(drips, address(caller), driverId);
-        driver = NFTDriver(address(new ManagedProxy(driverLogic, admin)));
+        driver = NFTDriver(address(new ManagedProxy(driverLogic, admin, "")));
         drips.updateDriverAddress(driverId, address(driver));
 
         tokenId = driver.mint(address(this), noMetadata());
@@ -166,6 +166,18 @@ contract NFTDriverTest is Test {
         driver.burn(newTokenId);
         vm.expectRevert(ERROR_ALREADY_MINTED);
         driver.safeMintWithSalt(salt, user, noMetadata());
+    }
+
+    function testSetTokenURI() public {
+        assertEq(driver.tokenURI(tokenId1), "", "Invalid initial token URI");
+        string memory URI = "some URI";
+        driver.setTokenURI(tokenId1, URI);
+        assertEq(driver.tokenURI(tokenId1), URI, "Invalid final token URI");
+    }
+
+    function testSetTokenURIRevertsWhenNotTokenHolder() public {
+        vm.expectRevert(ERROR_NOT_OWNER);
+        driver.setTokenURI(tokenIdUser, "some URI");
     }
 
     function testCollect() public {
@@ -297,6 +309,16 @@ contract NFTDriverTest is Test {
     function testEmitAccountMetadataRevertsWhenNotTokenHolder() public {
         vm.expectRevert(ERROR_NOT_OWNER);
         driver.emitAccountMetadata(tokenIdUser, someMetadata());
+    }
+
+    function testBurn() public {
+        driver.burn(tokenId1);
+        assertTokenDoesNotExist(tokenId1);
+    }
+
+    function testBurnRevertsWhenNotTokenHolder() public {
+        vm.expectRevert(ERROR_NOT_OWNER);
+        driver.burn(tokenIdUser);
     }
 
     function testForwarderIsTrustedInErc721Calls() public {

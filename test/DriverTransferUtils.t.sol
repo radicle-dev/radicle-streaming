@@ -76,7 +76,7 @@ contract DriverTransferUtilsTest is Test {
 
     function setUp() public {
         Drips dripsLogic = new Drips(10);
-        drips = Drips(address(new ManagedProxy(dripsLogic, address(this))));
+        drips = Drips(address(new ManagedProxy(dripsLogic, address(this), "")));
 
         caller = new Caller();
 

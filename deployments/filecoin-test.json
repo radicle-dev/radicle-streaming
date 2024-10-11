@@ -1,0 +1,16 @@
+{
+    "AddressDriver": "0xEFcd912a5a67C3a7Cc70a2Fb9aa17781bf1cE68F",
+    "Caller": "0x7f2457421718A541B9Ee01E2F77F8BA749055F3b",
+    "Deployer": "0xEF4B994f97092fD22B8a880c47F053910788471b",
+    "Drips": "0x0B71C2a08d27E86d3841A6772332DEde0bc8DCa5",
+    "Drips cycle seconds": 86400,
+    "DripsDeployer": "0x79f3e7Aa55D39bBD42de31677B715B2e4D6e8ab0",
+    "GiversRegistry": "0x1F83E99813941a9bd701342560BFFaC794D707d1",
+    "ImmutableSplitsDriver": "0x990806c7EFC1C26be162a46F821ca281618F28AA",
+    "LZBridgedGovernor": "0x6bC5C5D7dA80dC1c30677852ce9AA01df368E76f",
+    "NFTDriver": "0x1397579E87AB255C8474907183B074947eBa7338",
+    "NativeTokenUnwrapper": "0x8A388BE3fb93C28b66365DCbf3eAc344690BD1C4",
+    "RepoDriver": "0xf3aE6ADDeEE195e91380F5F9Ce73698460BAdf79",
+    "RepoDriver tasks owner": "0x6D3A0fAE4FBa0f543b9e3280E85F4e4f59ba3D54",
+    "Salt": "test5"
+}

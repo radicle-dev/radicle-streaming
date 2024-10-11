@@ -316,7 +316,7 @@ contract SplitsTest is Test, Splits {
         SplitsReceiver[_MAX_SPLITS_RECEIVERS] memory receiversRaw,
         uint256 receiversLengthRaw,
         uint256 totalWeightRaw
-    ) internal view returns (SplitsReceiver[] memory receivers) {
+    ) internal pure returns (SplitsReceiver[] memory receivers) {
         for (uint256 i = 0; i < receiversRaw.length; i++) {
             for (uint256 j = i + 1; j < receiversRaw.length; j++) {
                 if (receiversRaw[i].accountId > receiversRaw[j].accountId) {

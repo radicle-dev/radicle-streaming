@@ -1,4 +1,6 @@
 ds-test/=lib/forge-std/lib/ds-test/src/
 forge-std/=lib/forge-std/src/
 openzeppelin-contracts/=lib/openzeppelin-contracts/contracts/
-chainlink/=lib/chainlink/contracts/src/v0.8/
+layer-zero-v2/=lib/LayerZero-v2/
+gelato-automate/=lib/gelato-automate/contracts/
+axelar/=lib/axelar-gmp-sdk-solidity/contracts/

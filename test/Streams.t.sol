@@ -1585,7 +1585,7 @@ contract StreamsTest is Test, PseudoRandomUtils, Streams {
         return bound(streamingTimeRaw, 0, _cycleSecs * maxCycles);
     }
 
-    function sanitizeStreamsBalance(uint256 balanceRaw) internal view returns (uint128 balance) {
+    function sanitizeStreamsBalance(uint256 balanceRaw) internal pure returns (uint128 balance) {
         return uint128(bound(balanceRaw, 0, _MAX_STREAMS_BALANCE));
     }
 

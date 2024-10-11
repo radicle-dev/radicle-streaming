@@ -24,17 +24,16 @@ verify_parameter() {
     fi
 }
 
-deploy_deterministic_deployer() {
-    print_title "Sending funds to the address deploying deterministic deployer"
-    # Taken from https://github.com/Arachnid/deterministic-deployment-proxy
-    cast send $WALLET_ARGS --value "0.01ether" "0x3fAB184622Dc19b6109349B94811493BF2a45362"
+deploy_dummy_gelato_automate() {
+    print_title "Deploying dummy Gelato Automate"
+    GELATO_AUTOMATE=$(forge create $WALLET_ARGS --json src/RepoDriver.sol:DummyGelatoAutomate \
+        | jq -r '.deployedTo')
+}
 
-    print_title "Deploying deterministic deployer"
-    # Taken from https://github.com/Arachnid/deterministic-deployment-proxy
-    cast publish "0xf8a58085174876e800830186a08080b853604580600e600039806000f350fe7ffffffffffffffff\
-fffffffffffffffffffffffffffffffffffffffffffffffe03601600081602082378035828234f58015156039578182fd5b\
-8082525050506014600cf31ba02222222222222222222222222222222222222222222222222222222222222222a02222222\
-222222222222222222222222222222222222222222222222222222222"
+deploy_safe_singleton_factory() {
+    print_title "Deploying deterministic deployer on the local testnet"
+    cast rpc "anvil_setCode" "$SAFE_SINGLETON_FACTORY" "0x7fffffffffffffffffffffffffffffffffffffff\
+ffffffffffffffffffffffffe03601600081602082378035828234f58015156039578182fd5b8082525050506014600cf3"
 }
 
 deploy_create3_factory() {
@@ -44,7 +43,7 @@ deploy_create3_factory() {
     # in https://etherscan.io/tx/0xb05de371a18fc4f02753b34a689939cee69b93a043b926732043780959b7c4e3,
     # this is the input data of this transaction, which is the contract's init code.
     # It's reused verbatim to keep it byte-for-byte identical across all deployments and chains,
-    # so deterministic deployer always deploys it under the same address,
+    # so the Safe singleton factory always deploys it under the same address,
     # even if we upgrade the compiler or change its configuration.
     local INIT_CODE="0x608060405234801561001057600080fd5b5061063b806100206000396000f3fe608060405260\
 0436106100295760003560e01c806350f1c4641461002e578063cdcb760a14610077575b600080fd5b34801561003a57600\
@@ -81,11 +80,11 @@ ffffffffffffffffffffffffffe0908116603f0116810190838211818310171561059b5761059b61
 6fea2646970667358221220fd377c185926b3110b7e8a544f897646caf36a0e82b2629de851045e2a5f937764736f6c6343\
 0008100033"
     local SALT=$(cast to-bytes32 0)
-    cast send $WALLET_ARGS "$DETERMINISTIC_DEPLOYER" "$(cast concat-hex "$SALT" "$INIT_CODE")"
+    cast send $WALLET_ARGS "$SAFE_SINGLETON_FACTORY" "$(cast concat-hex "$SALT" "$INIT_CODE")"
 }
 
 drips_deployer() {
-    local GET_DEPLOYED="getDeployed(address deployer, bytes32 salt)(address deployed))"
+    local GET_DEPLOYED="getDeployed(address deployer, bytes32 salt)(address deployed)"
     local SALT="$(cast format-bytes32-string "$DRIPS_DEPLOYER_SALT")"
     cast call "$CREATE3_FACTORY" "$GET_DEPLOYED" "$WALLET" "$SALT"
 }
@@ -101,9 +100,9 @@ deploy_drips_deployer() {
     cast send $WALLET_ARGS "$CREATE3_FACTORY" "$DEPLOY" "$SALT" "$INIT_CODE"
 }
 
-deploy_modules() {
-    print_title "Deploying modules"
-    MODULE_INIT_CODES_1="[$(
+deploy_modules_1() {
+    print_title "Deploying modules 1"
+    deploy_modules "[$(
         create_module Drips address,uint32,address \
             "$DRIPS_DEPLOYER" "$DRIPS_CYCLE_SECS" "$DRIPS_ADMIN"
         ),$(
@@ -111,21 +110,31 @@ deploy_modules() {
         ),$(
         create_module AddressDriver address,address "$DRIPS_DEPLOYER" "$ADDRESS_DRIVER_ADMIN"
         )]"
-    MODULE_INIT_CODES_2="[$(
+}
+
+deploy_modules_2() {
+    print_title "Deploying modules 2"
+    deploy_modules "[$(
         create_module NFTDriver address,address "$DRIPS_DEPLOYER" "$NFT_DRIVER_ADMIN"
         ),$(
         create_module ImmutableSplitsDriver address,address \
             "$DRIPS_DEPLOYER" "$IMMUTABLE_SPLITS_DRIVER_ADMIN"
         )]"
-    MODULE_INIT_CODES_3="[$(
-        create_module RepoDriver address,address,address,bytes32,uint96 \
-            "$DRIPS_DEPLOYER" "$REPO_DRIVER_ADMIN" "$REPO_DRIVER_OPERATOR" \
-            $(cast format-bytes32-string "$REPO_DRIVER_JOB_ID") "$REPO_DRIVER_FEE"
+}
+
+deploy_modules_3() {
+    print_title "Deploying modules 3"
+    deploy_modules "[$(
+        create_module RepoDriver address,address,address,string,uint32,uint32 \
+            "$DRIPS_DEPLOYER" "$REPO_DRIVER_ADMIN" "$GELATO_AUTOMATE" "$REPO_DRIVER_IPFS_CID" \
+            "$REPO_DRIVER_MAX_REQUESTS_PER_BLOCK" "$REPO_DRIVER_MAX_REQUESTS_PER_31_DAYS"
         )]"
-    MODULE_INIT_CODES_4="[]"
+}
+
+deploy_modules() {
     cast send $WALLET_ARGS "$DRIPS_DEPLOYER" "deployModules((bytes32,uint256,bytes)[], \
         (bytes32,uint256,bytes)[],(bytes32,uint256,bytes)[],(bytes32,uint256,bytes)[])" \
-        "$MODULE_INIT_CODES_1" "$MODULE_INIT_CODES_2" "$MODULE_INIT_CODES_3" "$MODULE_INIT_CODES_4"
+        "$1" "[]" "[]" "[]"
 }
 
 # Args: contract name, constructor argument types, constructor arguments
@@ -149,38 +158,39 @@ print_deployment_json() {
     local REPO_DRIVER_MODULE="$(module_address RepoDriver)"
     tee "$DEPLOYMENT_JSON" <<EOF
 {
-    "Chain":                         "$CHAIN",
-    "Deployment time":               "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
-    "Commit hash":                   "$(git rev-parse HEAD)",
-    "Wallet":                        "$WALLET",
-    "Deterministic deployer":        "$DETERMINISTIC_DEPLOYER",
-    "CREATE3 factory":               "$CREATE3_FACTORY",
-    "DripsDeployer salt":            "$DRIPS_DEPLOYER_SALT",
-    "DripsDeployer":                 "$DRIPS_DEPLOYER",
-    "Drips":                         "$(query "$DRIPS_MODULE" drips address)",
-    "Drips cycle seconds":           "$(query "$DRIPS_MODULE" dripsCycleSecs uint32)",
-    "Drips logic":                   "$(query "$DRIPS_MODULE" logic address)",
-    "Drips admin":                   "$(query "$DRIPS_MODULE" proxyAdmin address)",
-    "Caller":                        "$(query "$CALLER_MODULE" caller address)",
-    "AddressDriver":                 "$(query "$ADDRESS_DRIVER_MODULE" addressDriver address)",
-    "AddressDriver ID":              "$(query "$ADDRESS_DRIVER_MODULE" driverId uint32)",
-    "AddressDriver logic":           "$(query "$ADDRESS_DRIVER_MODULE" logic address)",
-    "AddressDriver admin":           "$(query "$ADDRESS_DRIVER_MODULE" proxyAdmin address)",
-    "NFTDriver":                     "$(query "$NFT_DRIVER_MODULE" nftDriver address)",
-    "NFTDriver ID":                  "$(query "$NFT_DRIVER_MODULE" driverId uint32)",
-    "NFTDriver logic":               "$(query "$NFT_DRIVER_MODULE" logic address)",
-    "NFTDriver admin":               "$(query "$NFT_DRIVER_MODULE" proxyAdmin address)",
-    "ImmutableSplitsDriver":         "$(query "$IMMUTABLE_SPLITS_DRIVER_MODULE" immutableSplitsDriver address)",
-    "ImmutableSplitsDriver ID":      "$(query "$IMMUTABLE_SPLITS_DRIVER_MODULE" driverId uint32)",
-    "ImmutableSplitsDriver logic":   "$(query "$IMMUTABLE_SPLITS_DRIVER_MODULE" logic address)",
-    "ImmutableSplitsDriver admin":   "$(query "$IMMUTABLE_SPLITS_DRIVER_MODULE" proxyAdmin address)",
-    "RepoDriver":                    "$(query "$REPO_DRIVER_MODULE" repoDriver address)",
-    "RepoDriver ID":                 "$(query "$REPO_DRIVER_MODULE" driverId uint32)",
-    "RepoDriver AnyApi operator":    "$(query "$REPO_DRIVER_MODULE" operator address)",
-    "RepoDriver AnyApi job ID":      "$(cast parse-bytes32-string "$(query "$REPO_DRIVER_MODULE" jobId bytes32)")",
-    "RepoDriver AnyApi default fee": "$(query "$REPO_DRIVER_MODULE" defaultFee uint96)",
-    "RepoDriver logic":              "$(query "$REPO_DRIVER_MODULE" logic address)",
-    "RepoDriver admin":              "$(query "$REPO_DRIVER_MODULE" proxyAdmin address)"
+    "Chain":                                "$CHAIN",
+    "Deployment time":                      "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+    "Commit hash":                          "$(git rev-parse HEAD)",
+    "Wallet":                               "$WALLET",
+    "Safe singleton factory":               "$SAFE_SINGLETON_FACTORY",
+    "CREATE3 factory":                      "$CREATE3_FACTORY",
+    "DripsDeployer salt":                   "$DRIPS_DEPLOYER_SALT",
+    "DripsDeployer":                        "$DRIPS_DEPLOYER",
+    "Drips":                                "$(query "$DRIPS_MODULE" drips address)",
+    "Drips cycle seconds":                  "$(query "$DRIPS_MODULE" dripsCycleSecs uint32)",
+    "Drips logic":                          "$(query "$DRIPS_MODULE" logic address)",
+    "Drips admin":                          "$(query "$DRIPS_MODULE" proxyAdmin address)",
+    "Caller":                               "$(query "$CALLER_MODULE" caller address)",
+    "AddressDriver":                        "$(query "$ADDRESS_DRIVER_MODULE" addressDriver address)",
+    "AddressDriver ID":                     "$(query "$ADDRESS_DRIVER_MODULE" driverId uint32)",
+    "AddressDriver logic":                  "$(query "$ADDRESS_DRIVER_MODULE" logic address)",
+    "AddressDriver admin":                  "$(query "$ADDRESS_DRIVER_MODULE" proxyAdmin address)",
+    "NFTDriver":                            "$(query "$NFT_DRIVER_MODULE" nftDriver address)",
+    "NFTDriver ID":                         "$(query "$NFT_DRIVER_MODULE" driverId uint32)",
+    "NFTDriver logic":                      "$(query "$NFT_DRIVER_MODULE" logic address)",
+    "NFTDriver admin":                      "$(query "$NFT_DRIVER_MODULE" proxyAdmin address)",
+    "ImmutableSplitsDriver":                "$(query "$IMMUTABLE_SPLITS_DRIVER_MODULE" immutableSplitsDriver address)",
+    "ImmutableSplitsDriver ID":             "$(query "$IMMUTABLE_SPLITS_DRIVER_MODULE" driverId uint32)",
+    "ImmutableSplitsDriver logic":          "$(query "$IMMUTABLE_SPLITS_DRIVER_MODULE" logic address)",
+    "ImmutableSplitsDriver admin":          "$(query "$IMMUTABLE_SPLITS_DRIVER_MODULE" proxyAdmin address)",
+    "RepoDriver":                           "$(query "$REPO_DRIVER_MODULE" repoDriver address)",
+    "RepoDriver ID":                        "$(query "$REPO_DRIVER_MODULE" driverId uint32)",
+    "Gelato Automate":                      "$(query "$REPO_DRIVER_MODULE" gelatoAutomate address)",
+    "RepoDriver IPFS CID":                  $(query "$REPO_DRIVER_MODULE" ipfsCid string),
+    "RepoDriver max requests per block":    "$(query "$REPO_DRIVER_MODULE" maxRequestsPerBlock uint32)",
+    "RepoDriver max requests per 31 days":  "$(query "$REPO_DRIVER_MODULE" maxRequestsPer31Days uint32)",
+    "RepoDriver logic":                     "$(query "$REPO_DRIVER_MODULE" logic address)",
+    "RepoDriver admin":                     "$(query "$REPO_DRIVER_MODULE" proxyAdmin address)"
 }
 EOF
 }
@@ -202,8 +212,11 @@ main() {
     verify_parameter DRIPS_DEPLOYER_SALT
 
     # Set up the defaults
-    if [ $(cast chain-id) == 11155111 ]; then
+    CHAIN_ID="$(cast chain-id)"
+    if [ "$CHAIN_ID" == 11155111 ]; then
         CHAIN=sepolia
+    elif [ "$CHAIN_ID" == 314 ]; then
+        CHAIN=filecoin
     else
         CHAIN="$(cast chain)"
     fi
@@ -218,54 +231,75 @@ main() {
         cast to-check-sum-address "${IMMUTABLE_SPLITS_DRIVER_ADMIN:-$ADMIN}")"
     REPO_DRIVER_ADMIN="$(cast to-check-sum-address "${REPO_DRIVER_ADMIN:-$ADMIN}")"
     DRIPS_CYCLE_SECS="${DRIPS_CYCLE_SECS:-$(( 7 * 24 * 60 * 60 ))}" # 1 week
-    REPO_DRIVER_OPERATOR="${REPO_DRIVER_OPERATOR:-$(cast address-zero)}"
-    REPO_DRIVER_JOB_ID="${REPO_DRIVER_JOB_ID:-00000000000000000000000000000000}"
-    REPO_DRIVER_FEE="${REPO_DRIVER_FEE:-0}"
+    REPO_DRIVER_MAX_REQUESTS_PER_BLOCK="${REPO_DRIVER_MAX_REQUESTS_PER_BLOCK:-0}"
+    REPO_DRIVER_MAX_REQUESTS_PER_31_DAYS="${REPO_DRIVER_MAX_REQUESTS_PER_31_DAYS:-0}"
 
-    # Taken from https://github.com/Arachnid/deterministic-deployment-proxy
-    DETERMINISTIC_DEPLOYER="0x4e59b44847b379578588920cA78FbF26c0B4956C"
+    # Taken from https://github.com/safe-global/safe-singleton-factory
+    SAFE_SINGLETON_FACTORY="0x914d7Fec6aaC8cd542e72Bca78B30650d45643d7"
     # Always the same, see `deploy_create3_factory`
-    CREATE3_FACTORY="0x6aa3d87e99286946161dca02b97c5806fc5ed46f"
+    CREATE3_FACTORY="0xe9BE461efaB6f9079741da3b180249F81e66A461"
+    # Taken from https://docs.gelato.network/web3-services/web3-functions/contract-addresses
+    GELATO_AUTOMATE="0x2A6C106ae13B558BB9E2Ec64Bd2f1f7BEFF3A5E0"
 
-    DEPLOY_DETERMINISTIC_DEPLOYER="will be deployed"
+    DEPLOY_GELATO_AUTOMATE="a dummy will be deployed"
+    if [ "$(cast codesize "$GELATO_AUTOMATE")" != 0 ]; then
+        DEPLOY_GELATO_AUTOMATE="" # Do not deploy
+    fi
+    DEPLOY_SAFE_SINGLETON_FACTORY="will be deployed"
     DEPLOY_CREATE3_FACTORY="will be deployed"
     DEPLOY_DRIPS_DEPLOYER="will be deployed"
-    DEPLOY_MODULES="will be deployed"
-    if [ "$(cast code "$DETERMINISTIC_DEPLOYER")" != "0x" ]; then
-        DEPLOY_DETERMINISTIC_DEPLOYER="" # Do not deploy
-        if [ "$(cast code "$CREATE3_FACTORY")" != "0x" ]; then
+    DEPLOY_MODULES_1="will be deployed"
+    DEPLOY_MODULES_2="will be deployed"
+    DEPLOY_MODULES_3="will be deployed"
+    if [ "$(cast codesize "$SAFE_SINGLETON_FACTORY")" == 0 ]; then
+        if [ "$CHAIN_ID" != 31337 ]; then
+            echo "Error: Safe singleton factory not deployed on chain $CHAIN (ID $CHAIN_ID)"
+            exit 1
+        fi
+    else
+        DEPLOY_SAFE_SINGLETON_FACTORY="" # Do not deploy
+        if [ "$(cast codesize "$CREATE3_FACTORY")" != 0 ]; then
             DEPLOY_CREATE3_FACTORY="" # Do not deploy
             DRIPS_DEPLOYER=$(drips_deployer)
-            if [ "$(cast code "$DRIPS_DEPLOYER")" != "0x" ]; then
+            if [ "$(cast codesize "$DRIPS_DEPLOYER")" != 0 ]; then
                 DEPLOY_DRIPS_DEPLOYER="" # Do not deploy
-                if [ "$(cast call "$DRIPS_DEPLOYER" "moduleSalts()(bytes32[])")" != "[]" ]; then
-                    DEPLOY_MODULES="" # Do not deploy
+                if [ "$(cast codesize $(module_address Drips))" != 0 ]; then
+                    DEPLOY_MODULES_1="" # Do not deploy
+                fi
+                if [ "$(cast codesize $(module_address NFTDriver))" != 0 ]; then
+                    DEPLOY_MODULES_2="" # Do not deploy
+                fi
+                if [ "$(cast codesize $(module_address RepoDriver))" != 0 ]; then
+                    DEPLOY_MODULES_3="" # Do not deploy
                 fi
             fi
         fi
     fi
 
     print_title "Deployment configuration"
-    echo "Chain:                         $CHAIN"
-    echo "Wallet:                        $WALLET"
-    echo "Etherscan verification:        $(is_set ETHERSCAN_API_KEY)"
-    echo "Sourcify verification:         $(is_set VERIFY_SOURCIFY)"
-    echo "Blockscout verification:       $(is_set VERIFY_BLOCKSCOUT)"
-    echo "Deployment JSON:               $DEPLOYMENT_JSON"
-    echo "Deterministic deployer:        ${DEPLOY_DETERMINISTIC_DEPLOYER:-already deployed}"
-    echo "CREATE3 factory:               ${DEPLOY_CREATE3_FACTORY:-already deployed}"
-    echo "DripsDeployer salt:            $DRIPS_DEPLOYER_SALT"
-    echo "DripsDeployer:                 ${DEPLOY_DRIPS_DEPLOYER:-already deployed}"
-    echo "Modules:                       ${DEPLOY_MODULES:-already deployed}"
-    echo "Drips cycle seconds:           $DRIPS_CYCLE_SECS"
-    echo "Drips admin:                   $DRIPS_ADMIN"
-    echo "AddressDriver admin:           $ADDRESS_DRIVER_ADMIN"
-    echo "NFTDriver admin:               $NFT_DRIVER_ADMIN"
-    echo "ImmutableSplitsDriver admin:   $IMMUTABLE_SPLITS_DRIVER_ADMIN"
-    echo "RepoDriver AnyApi operator:    $REPO_DRIVER_OPERATOR"
-    echo "RepoDriver AnyApi job ID:      $REPO_DRIVER_JOB_ID"
-    echo "RepoDriver AnyApi default fee: $REPO_DRIVER_FEE"
-    echo "RepoDriver admin:              $REPO_DRIVER_ADMIN"
+    echo "Chain:                                $CHAIN"
+    echo "Wallet:                               $WALLET"
+    echo "Etherscan verification:               $(is_set ETHERSCAN_API_KEY)"
+    echo "Sourcify verification:                $(is_set VERIFY_SOURCIFY)"
+    echo "Blockscout verification:              $(is_set VERIFY_BLOCKSCOUT)"
+    echo "Deployment JSON:                      $DEPLOYMENT_JSON"
+    echo "Safe singleton factory:               ${DEPLOY_SAFE_SINGLETON_FACTORY:-already deployed}"
+    echo "CREATE3 factory:                      ${DEPLOY_CREATE3_FACTORY:-already deployed}"
+    echo "DripsDeployer salt:                   $DRIPS_DEPLOYER_SALT"
+    echo "DripsDeployer:                        ${DEPLOY_DRIPS_DEPLOYER:-already deployed}"
+    echo "Modules 1:                            ${DEPLOY_MODULES_1:-already deployed}"
+    echo "Modules 2:                            ${DEPLOY_MODULES_2:-already deployed}"
+    echo "Modules 3:                            ${DEPLOY_MODULES_3:-already deployed}"
+    echo "Drips cycle seconds:                  $DRIPS_CYCLE_SECS"
+    echo "Drips admin:                          $DRIPS_ADMIN"
+    echo "AddressDriver admin:                  $ADDRESS_DRIVER_ADMIN"
+    echo "NFTDriver admin:                      $NFT_DRIVER_ADMIN"
+    echo "ImmutableSplitsDriver admin:          $IMMUTABLE_SPLITS_DRIVER_ADMIN"
+    echo "Gelato Automate:                      ${DEPLOY_GELATO_AUTOMATE:-already deployed}"
+    echo "RepoDriver IPFS CID:                  ${REPO_DRIVER_IPFS_CID:-<none>}"
+    echo "RepoDriver max requests per block:    $REPO_DRIVER_MAX_REQUESTS_PER_BLOCK"
+    echo "RepoDriver max requests per 31 days:  $REPO_DRIVER_MAX_REQUESTS_PER_31_DAYS"
+    echo "RepoDriver admin:                     $REPO_DRIVER_ADMIN"
     echo
 
     echo "Proceed with deployment? [y/n]"
@@ -278,11 +312,15 @@ main() {
         esac
     done
 
-    print_title "Installing dependencies"
-    forge install
+    print_title "Building the smart contracts"
+    forge build
 
-    if [ -n "$DEPLOY_DETERMINISTIC_DEPLOYER" ]; then
-        deploy_deterministic_deployer
+    if [ -n "$DEPLOY_GELATO_AUTOMATE" ]; then
+        deploy_dummy_gelato_automate
+    fi
+
+    if [ -n "$DEPLOY_SAFE_SINGLETON_FACTORY" ]; then
+        deploy_safe_singleton_factory
     fi
 
     if [ -n "$DEPLOY_CREATE3_FACTORY" ]; then
@@ -293,8 +331,16 @@ main() {
         deploy_drips_deployer
     fi
 
-    if [ -n "$DEPLOY_MODULES" ]; then
-        deploy_modules
+    if [ -n "$DEPLOY_MODULES_1" ]; then
+        deploy_modules_1
+    fi
+
+    if [ -n "$DEPLOY_MODULES_2" ]; then
+        deploy_modules_2
+    fi
+
+    if [ -n "$DEPLOY_MODULES_3" ]; then
+        deploy_modules_3
     fi
 
     print_deployment_json

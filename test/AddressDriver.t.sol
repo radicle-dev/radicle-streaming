@@ -31,7 +31,7 @@ contract AddressDriverTest is Test {
 
     function setUp() public {
         Drips dripsLogic = new Drips(10);
-        drips = Drips(address(new ManagedProxy(dripsLogic, address(this))));
+        drips = Drips(address(new ManagedProxy(dripsLogic, address(this), "")));
 
         caller = new Caller();
 
@@ -40,7 +40,7 @@ contract AddressDriverTest is Test {
         drips.registerDriver(address(1));
         uint32 driverId = drips.registerDriver(address(this));
         AddressDriver driverLogic = new AddressDriver(drips, address(caller), driverId);
-        driver = AddressDriver(address(new ManagedProxy(driverLogic, admin)));
+        driver = AddressDriver(address(new ManagedProxy(driverLogic, admin, "")));
         drips.updateDriverAddress(driverId, address(driver));
 
         thisId = driver.calcAccountId(address(this));

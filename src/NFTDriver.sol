@@ -9,16 +9,16 @@ import {Managed} from "./Managed.sol";
 import {
     Context,
     ERC721,
-    ERC721Burnable,
+    ERC721URIStorage,
     IERC721,
     IERC721Metadata
-} from "openzeppelin-contracts/token/ERC721/extensions/ERC721Burnable.sol";
+} from "openzeppelin-contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 
 /// @notice A Drips driver implementing token-based account identification.
 /// Anybody can mint a new token and create a new identity.
 /// Only the current holder of the token can control its account ID.
 /// The token ID and the account ID controlled by it are always equal.
-contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
+contract NFTDriver is ERC721URIStorage, DriverTransferUtils, Managed {
     using SafeERC20 for IERC20;
 
     /// @notice The Drips address used by this driver.
@@ -195,6 +195,15 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
         require(!isSaltUsed(minter, salt), "ERC721: token already minted");
         _nftDriverStorage().isSaltUsed[minter][salt] = true;
         return calcTokenIdWithSalt(minter, salt);
+    }
+
+    /// @notice Sets the token URI.
+    /// @param tokenId The ID of the token for which token URI is being set.
+    /// The caller must be the owner of the token or be approved to use it.
+    /// The token ID is equal to the account ID controlled by it.
+    /// @param tokenURI The token URI to set.
+    function setTokenURI(uint256 tokenId, string calldata tokenURI) public onlyHolder(tokenId) {
+        _setTokenURI(tokenId, tokenURI);
     }
 
     /// @notice Collects the account's received already split funds
@@ -375,20 +384,25 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
         return "DHI";
     }
 
-    /// @inheritdoc ERC721Burnable
-    function burn(uint256 tokenId) public override whenNotPaused {
-        super.burn(tokenId);
+    /// @notice Burns the token controlling an account.
+    /// This freezes the account configuration and preventing any funds
+    /// from being deposited to or withdrawn from the protocol using that account.
+    /// @param tokenId The ID of the token representing the burned account ID.
+    /// The caller must be the owner of the token or be approved to use it.
+    /// The token ID is equal to the account ID controlled by it.
+    function burn(uint256 tokenId) public whenNotPaused onlyHolder(tokenId) {
+        _burn(tokenId);
     }
 
     /// @inheritdoc IERC721
-    function approve(address to, uint256 tokenId) public override whenNotPaused {
+    function approve(address to, uint256 tokenId) public override(ERC721, IERC721) whenNotPaused {
         super.approve(to, tokenId);
     }
 
     /// @inheritdoc IERC721
     function safeTransferFrom(address from, address to, uint256 tokenId)
         public
-        override
+        override(ERC721, IERC721)
         whenNotPaused
     {
         super.safeTransferFrom(from, to, tokenId);
@@ -397,21 +411,25 @@ contract NFTDriver is ERC721Burnable, DriverTransferUtils, Managed {
     /// @inheritdoc IERC721
     function safeTransferFrom(address from, address to, uint256 tokenId, bytes memory data)
         public
-        override
+        override(ERC721, IERC721)
         whenNotPaused
     {
         super.safeTransferFrom(from, to, tokenId, data);
     }
 
     /// @inheritdoc IERC721
-    function setApprovalForAll(address operator, bool approved) public override whenNotPaused {
+    function setApprovalForAll(address operator, bool approved)
+        public
+        override(ERC721, IERC721)
+        whenNotPaused
+    {
         super.setApprovalForAll(operator, approved);
     }
 
     /// @inheritdoc IERC721
     function transferFrom(address from, address to, uint256 tokenId)
         public
-        override
+        override(ERC721, IERC721)
         whenNotPaused
     {
         super.transferFrom(from, to, tokenId);

@@ -48,7 +48,7 @@ contract DripsTest is Test {
         otherErc20 = new ERC20PresetFixedSupply("other", "other", 2 ** 128, address(this));
         erc20 = defaultErc20;
         Drips dripsLogic = new Drips(10);
-        drips = Drips(address(new ManagedProxy(dripsLogic, admin)));
+        drips = Drips(address(new ManagedProxy(dripsLogic, admin, "")));
 
         driverId = drips.registerDriver(driver);
         uint256 baseAccountId = driverId << 224;

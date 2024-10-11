@@ -6,6 +6,7 @@ import {Test} from "forge-std/Test.sol";
 
 contract Logic is Managed {
     uint256 public immutable instanceId;
+    bool public called;
 
     constructor(uint256 instanceId_) {
         instanceId = instanceId_;
@@ -13,6 +14,10 @@ contract Logic is Managed {
 
     function erc1967Slot(string memory name) public pure returns (bytes32 slot) {
         return _erc1967Slot(name);
+    }
+
+    function onlyAdminOrConstructorFunction() public onlyAdminOrConstructor {
+        called = true;
     }
 }
 
@@ -29,7 +34,7 @@ contract ManagedTest is Test {
 
     function setUp() public {
         logic = new Logic(0);
-        proxy = Logic(address(new ManagedProxy(logic, admin)));
+        proxy = Logic(address(new ManagedProxy(logic, admin, "")));
         vm.prank(admin);
         proxy.grantPauser(pauser);
     }
@@ -43,6 +48,30 @@ contract ManagedTest is Test {
         assertTrue(logic.isPaused(), "Not paused");
         assertEq(logic.admin(), address(0), "Admin not zero");
         assertEq(logic.allPausers(), new address[](0), "Pausers not empty");
+    }
+
+    function testArbitraryUserCanNotCallOnlyAdminOrConstructorFunction() public {
+        vm.expectRevert(ERROR_NOT_ADMIN);
+        proxy.onlyAdminOrConstructorFunction();
+    }
+
+    function testPauserCanNotCallOnlyAdminOrConstructorFunction() public {
+        vm.prank(pauser);
+        vm.expectRevert(ERROR_NOT_ADMIN);
+        proxy.onlyAdminOrConstructorFunction();
+    }
+
+    function testAdminCanCallOnlyAdminOrConstructorFunction() public {
+        vm.prank(admin);
+        proxy.onlyAdminOrConstructorFunction();
+        assertTrue(proxy.called(), "Function wasn't called");
+    }
+
+    function testProxyConstructorCanCallOnlyAdminOrConstructorFunction() public {
+        bytes memory data = abi.encodeCall(Logic.onlyAdminOrConstructorFunction, ());
+        Logic proxy_ = Logic(address(new ManagedProxy(new Logic(0), admin, data)));
+        assertEq(proxy_.admin(), admin, "Invalid admin address");
+        assertTrue(proxy_.called(), "Function wasn't called");
     }
 
     function testAdminCanProposeNewAdmin() public {

@@ -14,14 +14,14 @@ contract ImmutableSplitsDriverTest is Test {
 
     function setUp() public {
         Drips dripsLogic = new Drips(10);
-        drips = Drips(address(new ManagedProxy(dripsLogic, address(this))));
+        drips = Drips(address(new ManagedProxy(dripsLogic, address(this), "")));
 
         // Make the driver ID non-0 to test if it's respected by the driver
         drips.registerDriver(address(1));
         drips.registerDriver(address(1));
         uint32 driverId = drips.registerDriver(address(this));
         ImmutableSplitsDriver driverLogic = new ImmutableSplitsDriver(drips, driverId);
-        driver = ImmutableSplitsDriver(address(new ManagedProxy(driverLogic, admin)));
+        driver = ImmutableSplitsDriver(address(new ManagedProxy(driverLogic, admin, "")));
         drips.updateDriverAddress(driverId, address(driver));
         totalSplitsWeight = driver.totalSplitsWeight();
     }
