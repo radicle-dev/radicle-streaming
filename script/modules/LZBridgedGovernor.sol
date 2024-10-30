@@ -9,9 +9,22 @@ import {
     Module,
     ModuleData
 } from "script/utils/ModulesDeployer.sol";
-import {LZBridgedGovernor} from "src/BridgedGovernor.sol";
+import {Call, LZBridgedGovernor} from "src/BridgedGovernor.sol";
 
 bytes32 constant LZ_BRIDGED_GOVERNOR_MODULE_SALT = "LZBridgedGovernorModule";
+bytes32 constant LZ_BRIDGED_GOVERNOR_SALT = "LZBridgedGovernor";
+
+/// @dev Needed to reduce the number of the `LZBridgedGovernorModule`
+/// constructor args and prevent the stack too deep error.
+struct BridgeOwner {
+    uint32 eid;
+    bytes32 id;
+}
+
+function lzBridgedGovernorAddress(ModulesDeployer modulesDeployer) view returns (address) {
+    address module = modulesDeployer.module(LZ_BRIDGED_GOVERNOR_MODULE_SALT);
+    return modulesDeployer.create3Factory().getDeployed(module, LZ_BRIDGED_GOVERNOR_SALT);
+}
 
 function isLZBridgedGovernorModuleDeployed(ModulesDeployer modulesDeployer)
     view
@@ -31,9 +44,10 @@ function lzBridgedGovernorModuleData(
     ModulesDeployer modulesDeployer,
     address endpoint,
     uint32 ownerEid,
-    bytes32 owner
+    bytes32 owner,
+    Call[] memory calls
 ) pure returns (ModuleData memory) {
-    bytes memory args = abi.encode(modulesDeployer, endpoint, ownerEid, owner);
+    bytes memory args = abi.encode(modulesDeployer, endpoint, BridgeOwner(ownerEid, owner), calls);
     return ModuleData({
         salt: LZ_BRIDGED_GOVERNOR_MODULE_SALT,
         initCode: abi.encodePacked(type(LZBridgedGovernorModule).creationCode, args),
@@ -44,11 +58,15 @@ function lzBridgedGovernorModuleData(
 contract LZBridgedGovernorModule is Module {
     LZBridgedGovernor public immutable lzBridgedGovernor;
 
-    constructor(ModulesDeployer modulesDeployer, address endpoint, uint32 ownerEid, bytes32 owner)
-        Module(modulesDeployer, LZ_BRIDGED_GOVERNOR_MODULE_SALT)
-    {
-        LZBridgedGovernor logic = new LZBridgedGovernor(endpoint, ownerEid, owner);
-        address proxy = create3GovernorProxy(modulesDeployer, "LZBridgedGovernor", logic);
+    constructor(
+        ModulesDeployer modulesDeployer,
+        address endpoint,
+        BridgeOwner memory owner,
+        Call[] memory calls
+    ) Module(modulesDeployer, LZ_BRIDGED_GOVERNOR_MODULE_SALT) {
+        LZBridgedGovernor logic = new LZBridgedGovernor(endpoint, owner.eid, owner.id);
+        address proxy =
+            create3GovernorProxy(modulesDeployer, LZ_BRIDGED_GOVERNOR_SALT, logic, calls);
         lzBridgedGovernor = LZBridgedGovernor(payable(proxy));
     }
 }

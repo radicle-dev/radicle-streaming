@@ -9,7 +9,7 @@ import {
     Module,
     ModuleData
 } from "script/utils/ModulesDeployer.sol";
-import {AxelarBridgedGovernor, IAxelarGMPGateway} from "src/BridgedGovernor.sol";
+import {AxelarBridgedGovernor, Call, IAxelarGMPGateway} from "src/BridgedGovernor.sol";
 
 bytes32 constant AXELAR_BRIDGED_GOVERNOR_MODULE_SALT = "AxelarBridgedGovernorModule";
 
@@ -52,7 +52,8 @@ contract AxelarBridgedGovernorModule is Module {
         address owner
     ) Module(modulesDeployer, AXELAR_BRIDGED_GOVERNOR_MODULE_SALT) {
         AxelarBridgedGovernor logic = new AxelarBridgedGovernor(gateway, ownerChain, owner);
-        address proxy = create3GovernorProxy(modulesDeployer, "AxelarBridgedGovernor", logic);
+        address proxy =
+            create3GovernorProxy(modulesDeployer, "AxelarBridgedGovernor", logic, new Call[](0));
         axelarBridgedGovernor = AxelarBridgedGovernor(payable(proxy));
     }
 }

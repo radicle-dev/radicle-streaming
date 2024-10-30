@@ -17,10 +17,13 @@ function create3ManagedProxy(
     return create3(modulesDeployer, salt, type(ManagedProxy).creationCode, args);
 }
 
-function create3GovernorProxy(ModulesDeployer modulesDeployer, bytes32 salt, Governor logic)
-    returns (address proxy)
-{
-    bytes memory args = abi.encode(logic, new Call[](0));
+function create3GovernorProxy(
+    ModulesDeployer modulesDeployer,
+    bytes32 salt,
+    Governor logic,
+    Call[] memory calls
+) returns (address proxy) {
+    bytes memory args = abi.encode(logic, calls);
     // slither-disable-next-line too-many-digits
     return create3(modulesDeployer, salt, type(GovernorProxy).creationCode, args);
 }

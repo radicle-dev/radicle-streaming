@@ -21,10 +21,11 @@ import {writeDeploymentJson} from "script/utils/DeploymentJson.sol";
 import {
     deployModulesDeployer, ModulesDeployer, ModuleData
 } from "script/utils/ModulesDeployer.sol";
+import {RADWORKS} from "script/utils/Radworks.sol";
 
 /// @dev As of 09.10.2024 Foundry doesn't work well with the Filecoin RPCs.
 /// To avoid errors, pass `--gas-estimate-multiplier 80000 --slow` to `forge script`.
-contract FilecoinDeploy is Script {
+contract DeployToFilecoin is Script {
     function run() public {
         require(block.chainid == 314, "Must be run on Filecoin");
         string memory salt = vm.envString("SALT");
@@ -40,30 +41,28 @@ contract FilecoinDeploy is Script {
             // Taken from https://docs.axelar.dev/dev/reference/mainnet-contract-addresses/
             gateway: IAxelarGMPGateway(0xe432150cce91c13a887f7D836923d5597adD8E31),
             ownerChain: "Ethereum",
-            // Radworks governance on Ethereum controlling the bridge.
-            owner: 0x8dA8f82d2BbDd896822de723F55D6EdF416130ba
+            owner: RADWORKS
         });
         modulesDeployer.deployModules(modules);
 
-        address admin =
+        address governor =
             address(axelarBridgedGovernorModule(modulesDeployer).axelarBridgedGovernor());
 
         modules = new ModuleData[](2);
         modules[0] = callerModuleData(modulesDeployer);
-        modules[1] =
-            dripsModuleData({modulesDeployer: modulesDeployer, admin: admin, cycleSecs: 1 days});
+        modules[1] = dripsModuleData(modulesDeployer, governor, 1 days);
         modulesDeployer.deployModules(modules);
 
         modules = new ModuleData[](2);
-        modules[0] = addressDriverModuleData(modulesDeployer, admin);
-        modules[1] = nftDriverModuleData(modulesDeployer, admin);
+        modules[0] = addressDriverModuleData(modulesDeployer, governor);
+        modules[1] = nftDriverModuleData(modulesDeployer, governor);
         modulesDeployer.deployModules(modules);
 
         modules = new ModuleData[](2);
-        modules[0] = immutableSplitsDriverModuleData(modulesDeployer, admin);
+        modules[0] = immutableSplitsDriverModuleData(modulesDeployer, governor);
         modules[1] = repoDriverModuleData({
             modulesDeployer: modulesDeployer,
-            admin: admin,
+            admin: governor,
             // Taken from https://docs.gelato.network/web3-services/web3-functions/contract-addresses
             gelatoAutomate: IAutomate(0x2A6C106ae13B558BB9E2Ec64Bd2f1f7BEFF3A5E0),
             // Deployed from https://github.com/drips-network/contracts-gelato-web3-function
@@ -79,7 +78,7 @@ contract FilecoinDeploy is Script {
         // Take from https://docs.filecoin.io/smart-contracts/advanced/wrapped-fil
         IWrappedNativeToken wfil = IWrappedNativeToken(0x60E1773636CF5E4A227d9AC24F20fEca034ee25A);
         modules = new ModuleData[](2);
-        modules[0] = giversRegistryModuleData(modulesDeployer, admin, wfil);
+        modules[0] = giversRegistryModuleData(modulesDeployer, governor, wfil);
         modules[1] = nativeTokenUnwrapperModuleData(modulesDeployer, wfil);
         modulesDeployer.deployModules(modules);
 
