@@ -25,10 +25,11 @@ import {RADWORKS} from "script/utils/Radworks.sol";
 
 /// @dev As of 09.10.2024 Foundry doesn't work well with the Filecoin RPCs.
 /// To avoid errors, pass `--gas-estimate-multiplier 80000 --slow` to `forge script`.
-contract DeployToFilecoin is Script {
+contract Deploy is Script {
     function run() public {
         require(block.chainid == 314, "Must be run on Filecoin");
         string memory salt = vm.envString("SALT");
+        address radworks = vm.envOr("RADWORKS", RADWORKS);
 
         vm.startBroadcast();
         ICreate3Factory create3Factory = deployCreate3Factory();
@@ -41,7 +42,7 @@ contract DeployToFilecoin is Script {
             // Taken from https://docs.axelar.dev/dev/reference/mainnet-contract-addresses/
             gateway: IAxelarGMPGateway(0xe432150cce91c13a887f7D836923d5597adD8E31),
             ownerChain: "Ethereum",
-            owner: RADWORKS
+            owner: radworks
         });
         modulesDeployer.deployModules(modules);
 

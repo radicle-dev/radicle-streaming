@@ -44,10 +44,11 @@ function lzBridgedGovernorModuleData(
     ModulesDeployer modulesDeployer,
     address endpoint,
     uint32 ownerEid,
-    bytes32 owner,
+    address owner,
     Call[] memory calls
 ) pure returns (ModuleData memory) {
-    bytes memory args = abi.encode(modulesDeployer, endpoint, BridgeOwner(ownerEid, owner), calls);
+    BridgeOwner memory bridgeOwner = BridgeOwner(ownerEid, bytes32(uint256(uint160(owner))));
+    bytes memory args = abi.encode(modulesDeployer, endpoint, bridgeOwner, calls);
     return ModuleData({
         salt: LZ_BRIDGED_GOVERNOR_MODULE_SALT,
         initCode: abi.encodePacked(type(LZBridgedGovernorModule).creationCode, args),

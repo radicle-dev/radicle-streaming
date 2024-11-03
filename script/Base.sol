@@ -20,15 +20,21 @@ import {IAutomate, repoDriverModuleData} from "script/modules/RepoDriver.sol";
 import {deployCreate3Factory, ICreate3Factory} from "script/utils/Create3Factory.sol";
 import {writeDeploymentJson} from "script/utils/DeploymentJson.sol";
 import {
+    addToProposalConfigInit, addToProposalGovernorMessage,
     createSetConfigParams,
     ETHEREUM_EID,
-    governorConfigInitCalls,
-    RADWORKS_ID,
-    SetConfigParam
+    governorConfigInitCalls, LZBridgedGovernor,
+    SetConfigParam,upgradeToCall
 } from "script/utils/LayerZero.sol";
 import {
     deployModulesDeployer, ModulesDeployer, ModuleData
 } from "script/utils/ModulesDeployer.sol";
+import {
+    addToProposalWithdrawWeth,
+    createProposal,execute,propose,RadworksProposal, RADWORKS,
+    requireRunOnEthereum,
+    WETH
+} from "script/utils/Radworks.sol";
 
 // Take from https://docs.base.org/docs/base-contracts
 IWrappedNativeToken constant WRAPPED_NATIVE_TOKEN =
@@ -39,7 +45,7 @@ uint32 constant BASE_EID = 30184;
 address constant BASE_ENDPOINT = 0x1a44076050125825900e736c501f859c50fE728c;
 address constant BASE_RECEIVE_ULN = 0xc70AB6f32772f59fBfc23889Caf4Ba3376C84bAf;
 
-function baseSetConfigParams() pure returns (SetConfigParam[] memory params) {
+function governorSetConfigParams() pure returns (SetConfigParam[] memory params) {
     // Taken from https://docs.layerzero.network/v2/developers/evm/technical-reference/dvn-addresses
     address[] memory dvns = new address[](5);
     dvns[0] = 0xC50a49186aA80427aA3b0d3C2Cec19BA64222A29; // Lagrange
@@ -50,7 +56,7 @@ function baseSetConfigParams() pure returns (SetConfigParam[] memory params) {
     return createSetConfigParams({otherChainEid: ETHEREUM_EID, dvns: dvns, threshold: 3});
 }
 
-function ethereumSetConfigParams() pure returns (SetConfigParam[] memory params) {
+function radworksSetConfigParams() pure returns (SetConfigParam[] memory params) {
     // Taken from https://docs.layerzero.network/v2/developers/evm/technical-reference/dvn-addresses
     address[] memory dvns = new address[](5);
     dvns[0] = 0x95729Ea44326f8adD8A9b1d987279DBdC1DD3dFf; // Lagrange
@@ -61,10 +67,19 @@ function ethereumSetConfigParams() pure returns (SetConfigParam[] memory params)
     return createSetConfigParams({otherChainEid: BASE_EID, dvns: dvns, threshold: 3});
 }
 
-contract DeployToBase is Script {
+contract Deploy is Script {
     function run() public {
-        require(block.chainid == 8453, "Must be run on Base");
-        string memory salt = vm.envString("SALT");
+        string memory salt;
+        address radworks;
+        if(vm.envOr("FINAL_RUN", false)) {
+            require(block.chainid == 8453, "Not running on Base");
+            require(msg.sender == 0x7dCaCF417BA662840DcD2A35b67f55911815dD7e, "Use the deployer wallet");
+            salt = "DripsV2Final";
+            radworks = RADWORKS;
+        } else {
+            salt = vm.envString("SALT");
+            radworks = vm.envAddress("RADWORKS");
+        }
 
         vm.startBroadcast();
         ICreate3Factory create3Factory = deployCreate3Factory();
@@ -72,25 +87,28 @@ contract DeployToBase is Script {
             deployModulesDeployer(create3Factory, bytes32(bytes(salt)), msg.sender);
 
         address governor = lzBridgedGovernorAddress(modulesDeployer);
-        ModuleData[] memory modules = new ModuleData[](9);
+        ModuleData[] memory modules = new ModuleData[](4);
         modules[0] = lzBridgedGovernorModuleData({
             modulesDeployer: modulesDeployer,
             endpoint: BASE_ENDPOINT,
             ownerEid: ETHEREUM_EID,
-            owner: RADWORKS_ID,
+            owner: radworks,
             calls: governorConfigInitCalls({
                 endpoint: BASE_ENDPOINT,
                 governor: governor,
                 receiveUln: BASE_RECEIVE_ULN,
-                params: baseSetConfigParams()
+                params: governorSetConfigParams()
             })
         });
         modules[1] = callerModuleData(modulesDeployer);
         modules[2] = dripsModuleData(modulesDeployer, governor, 1 days);
         modules[3] = addressDriverModuleData(modulesDeployer, governor);
-        modules[4] = nftDriverModuleData(modulesDeployer, governor);
-        modules[5] = immutableSplitsDriverModuleData(modulesDeployer, governor);
-        modules[6] = repoDriverModuleData({
+        modulesDeployer.deployModules(modules);
+
+        modules = new ModuleData[](5);
+        modules[0] = nftDriverModuleData(modulesDeployer, governor);
+        modules[1] = immutableSplitsDriverModuleData(modulesDeployer, governor);
+        modules[2] = repoDriverModuleData({
             modulesDeployer: modulesDeployer,
             admin: governor,
             // Taken from https://docs.gelato.network/web3-services/web3-functions/contract-addresses
@@ -103,12 +121,44 @@ contract DeployToBase is Script {
             maxRequestsPerBlock: 80,
             maxRequestsPer31Days: 18000
         });
-        modules[7] = giversRegistryModuleData(modulesDeployer, governor, WRAPPED_NATIVE_TOKEN);
-        modules[8] = nativeTokenUnwrapperModuleData(modulesDeployer, WRAPPED_NATIVE_TOKEN);
+        modules[3] = giversRegistryModuleData(modulesDeployer, governor, WRAPPED_NATIVE_TOKEN);
+        modules[4] = nativeTokenUnwrapperModuleData(modulesDeployer, WRAPPED_NATIVE_TOKEN);
         modulesDeployer.deployModules(modules);
 
-        vm.stopBroadcast();
-
         writeDeploymentJson(vm, modulesDeployer, salt);
+    }
+}
+
+contract ProposeTestUpdate is Script{
+    function run() public {
+        requireRunOnEthereum();
+        address radworks = 0xd7bEbfA4ecF5df8bF92Fca35d0Ce7995db2E2E96;
+        address governor = 0xEDcC9Ca2303dC8f67879F1BCF6549CBe7FfdBb17;
+        address proxy = 0x245A4AF555216cCeaf18968fbb85206B10EB4AcC;
+        address implementation = 0x747D2cb1e9dC2bEF8E4E08778A85Df8d43b93842;
+        uint256 nonce = 0;
+
+        RadworksProposal memory proposal =
+            createProposal(radworks, "Update a proxy\nThis is just a **test**!");
+
+        addToProposalConfigInit(proposal, radworksSetConfigParams());
+
+        uint256 fee = 0.01 ether;
+        addToProposalWithdrawWeth(proposal, fee);
+
+        Call[] memory calls = new Call[](1);
+        calls[0] = upgradeToCall(proxy, implementation);
+        addToProposalGovernorMessage({
+            proposal: proposal,
+            fee: fee,
+            governorEid: BASE_EID,
+            governor: governor,
+            gas: 100_000,
+            message: LZBridgedGovernor.Message({nonce: nonce, value: 0, calls: calls})
+        });
+
+        vm.startBroadcast();
+        // propose(proposal);
+        execute(proposal);
     }
 }

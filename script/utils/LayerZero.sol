@@ -9,11 +9,11 @@ import {
 } from "layer-zero-v2/protocol/contracts/interfaces/ILayerZeroEndpointV2.sol";
 import {SetConfigParam} from "layer-zero-v2/protocol/contracts/interfaces/IMessageLibManager.sol";
 import {Constant} from "layer-zero-v2/messagelib/test/util/Constant.sol";
-import {addProposalStep, RADWORKS, RadworksProposal} from "script/utils/Radworks.sol";
+import {addToProposal, RadworksProposal} from "script/utils/Radworks.sol";
 import {LZBridgedGovernor, Call} from "src/BridgedGovernor.sol";
+import {UUPSUpgradeable} from "src/Managed.sol";
 
 // Taken from https://docs.layerzero.network/v2/developers/evm/technical-reference/deployed-contracts
-bytes32 constant RADWORKS_ID = bytes32(uint256(uint160(RADWORKS)));
 uint32 constant ETHEREUM_EID = 30101;
 address constant ETHEREUM_ENDPOINT = 0x1a44076050125825900e736c501f859c50fE728c;
 address constant ETHEREUM_SEND_ULN = 0xbB2Ea70C9E858123480642Cf96acbcCE1372dCe1;
@@ -86,25 +86,30 @@ function governorConfigUpdateCall(
     return Call({target: endpoint, data: data, value: 0});
 }
 
-function addRadworksConfigInit(RadworksProposal memory proposal, SetConfigParam[] memory params)
+function upgradeToCall(address proxy, address newImplementation) pure returns (Call memory call) {
+    bytes memory data = abi.encodeCall(UUPSUpgradeable.upgradeTo, (newImplementation));
+    return Call({target: proxy, data: data, value: 0});
+}
+
+function addToProposalConfigInit(RadworksProposal memory proposal, SetConfigParam[] memory params)
     pure
 {
     bytes memory data = abi.encodeCall(
-        IMessageLibManager.setSendLibrary, (RADWORKS, params[0].eid, ETHEREUM_SEND_ULN)
+        IMessageLibManager.setSendLibrary, (proposal.radworks, params[0].eid, ETHEREUM_SEND_ULN)
     );
-    addProposalStep(proposal, ETHEREUM_ENDPOINT, 0, data);
-    addRadworksConfigUpdate(proposal, params);
+    addToProposal(proposal, ETHEREUM_ENDPOINT, 0, data);
+    addToProposalConfigUpdate(proposal, params);
 }
 
-function addRadworksConfigUpdate(RadworksProposal memory proposal, SetConfigParam[] memory params)
+function addToProposalConfigUpdate(RadworksProposal memory proposal, SetConfigParam[] memory params)
     pure
 {
     bytes memory data =
-        abi.encodeCall(IMessageLibManager.setConfig, (RADWORKS, ETHEREUM_SEND_ULN, params));
-    addProposalStep(proposal, ETHEREUM_ENDPOINT, 0, data);
+        abi.encodeCall(IMessageLibManager.setConfig, (proposal.radworks, ETHEREUM_SEND_ULN, params));
+    addToProposal(proposal, ETHEREUM_ENDPOINT, 0, data);
 }
 
-function addGovernorMessage(
+function addToProposalGovernorMessage(
     RadworksProposal memory proposal,
     uint256 fee,
     uint32 governorEid,
@@ -128,6 +133,6 @@ function addGovernorMessage(
         options: messageOptions,
         payInLzToken: false
     });
-    bytes memory data = abi.encodeCall(ILayerZeroEndpointV2.send, (params, RADWORKS));
-    addProposalStep(proposal, ETHEREUM_ENDPOINT, fee, data);
+    bytes memory data = abi.encodeCall(ILayerZeroEndpointV2.send, (params, proposal.radworks));
+    addToProposal(proposal, ETHEREUM_ENDPOINT, fee, data);
 }
