@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pragma solidity ^0.8.20;
 
-import {Test} from "forge-std/Test.sol";
+import {console, Test} from "forge-std/Test.sol";
 import {AddressDriver, Drips, IERC20, StreamReceiver} from "src/AddressDriver.sol";
 import {Address, Giver, GiversRegistry} from "src/Giver.sol";
 import {IWrappedNativeToken} from "src/IWrappedNativeToken.sol";
 import {ManagedProxy} from "src/Managed.sol";
+import {CONTRACT_DEPLOYER} from "src/ZkSyncUtils.sol";
 import {
     ERC20,
     ERC20PresetFixedSupply
@@ -53,7 +54,7 @@ contract GiverTest is Test {
 
     function testTransferToGiver() public {
         uint256 amt = 123;
-        payable(address(giver)).transfer(amt);
+        Address.sendValue(payable(address(giver)), amt);
         assertEq(address(giver).balance, amt, "Invalid balance");
     }
 }
@@ -163,6 +164,27 @@ contract GiversRegistryTest is Test {
     }
 
     function testGiveZeroWrapped() public {
+        // console.log("Giver type bytecode");
+        // console.logBytes(type(Giver).creationCode);
+
+        // console.log("Giver type bytecode hash");
+        // bytes32 creationCodeHash = keccak256(type(Giver).creationCode);
+        // console.logBytes32(creationCodeHash);
+
+        // console.log("Giver contract bytecode");
+        bytes32 codeHash = address(new Giver()).codehash;
+        // console.logBytes32(codeHash);
+
+        Giver givr2 = Giver(payable(CONTRACT_DEPLOYER.create2("salty?", codeHash, "")));
+        console.log("Giver 2", address(givr2));
+        console.log("Giver 2 owner", givr2.owner());
+
+        console.log("Will a()");
+        Giver givr3 = new Lol().a();
+        console.log("Giver 3", address(givr3));
+        console.log("Giver 3 owner", givr3.owner());
+
+
         giveNative(0, 0);
     }
 
@@ -176,5 +198,14 @@ contract GiversRegistryTest is Test {
     function testGiveImplReverts() public {
         vm.expectRevert("Caller is not GiversRegistry");
         giversRegistry.giveImpl(accountId, erc20);
+    }
+}
+
+
+contract Lol {
+    function a() public returns (Giver) {
+        bytes32 codeHash = address(new Giver()).codehash;
+        console.log("Giver out");
+        return Giver(payable(CONTRACT_DEPLOYER.create2("salty?", codeHash, "")));
     }
 }

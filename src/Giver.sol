@@ -4,9 +4,11 @@ pragma solidity ^0.8.20;
 import {AddressDriver, Drips, IERC20} from "./AddressDriver.sol";
 import {IWrappedNativeToken} from "./IWrappedNativeToken.sol";
 import {Managed} from "./Managed.sol";
+import {CONTRACT_DEPLOYER} from "./ZkSyncUtils.sol";
 import {Clones} from "openzeppelin-contracts/proxy/Clones.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
+import {console} from "forge-std/Test.sol";
 
 /// @notice Each Drips account ID has a single `Giver` contract assigned to it,
 /// and each `Giver` has a single account ID assigned.
@@ -44,6 +46,8 @@ contract GiversRegistry is Managed {
     IWrappedNativeToken public immutable wrappedNativeToken;
     /// @notice The driver to use to `give`.
     AddressDriver public immutable addressDriver;
+    /// @notice The `Giver` bytecode hash, used to calculate its CREATE2 deployment addresses.
+    bytes32 public immutable giverCodeHash = address(new Giver()).codehash;
     /// @notice The `Drips` contract used by `addressDriver`.
     // slither-disable-next-line naming-convention
     Drips internal immutable _drips;
@@ -73,19 +77,8 @@ contract GiversRegistry is Managed {
     /// @param accountId The ID of the account to which the `Giver` is assigned.
     /// @param deployer The address of the deployer of the `Giver` and its logic.
     /// @return giver_ The address of the `Giver`.
-    function _giver(uint256 accountId, address deployer) internal pure returns (address giver_) {
-        return
-            Clones.predictDeterministicAddress(_giverLogic(deployer), bytes32(accountId), deployer);
-    }
-
-    /// @notice Calculate the address of the logic that is cloned for each `Giver`.
-    /// @param deployer The address of the deployer of the `Giver` logic.
-    /// @param giverLogic The address of the `Giver` logic.
-    function _giverLogic(address deployer) internal pure returns (address giverLogic) {
-        // The address is calculated assuming that the logic is the first contract
-        // deployed by the instance of `GiversRegistry` using plain `CREATE`.
-        bytes32 hash = keccak256(abi.encodePacked(hex"D694", deployer, hex"01"));
-        return address(uint160(uint256(hash)));
+    function _giver(uint256 accountId, address deployer) internal view returns (address giver_) {
+        return CONTRACT_DEPLOYER.getNewAddressCreate2(deployer, giverCodeHash, bytes32(accountId), "");
     }
 
     /// @notice `give` to the account all the tokens held by the `Giver` assigned to that account.
@@ -97,11 +90,9 @@ contract GiversRegistry is Managed {
     function give(uint256 accountId, IERC20 erc20) public whenNotPaused returns (uint256 amt) {
         address giver_ = giver(accountId);
         if (!Address.isContract(giver_)) {
-            address giverLogic = _giverLogic(address(this));
-            // `Giver` is deployed using nonce `0`, so under the `giverLogic` address
-            if (!Address.isContract(giverLogic)) new Giver();
-            // slither-disable-next-line unused-return
-            Clones.cloneDeterministic(giverLogic, bytes32(accountId));
+            console.log("Will create2");
+            CONTRACT_DEPLOYER.create2(/* bytes32(accountId) */ "salty?", giverCodeHash, "");
+            console.log("Did create2");
         }
         bytes memory delegateCalldata = abi.encodeCall(this.giveImpl, (accountId, erc20));
         bytes memory returned = Giver(payable(giver_)).delegate(implementation(), delegateCalldata);

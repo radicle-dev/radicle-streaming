@@ -44,7 +44,7 @@ contract CallerTest is Test {
         uint256 input = 1234567890;
         bytes memory data = abi.encodeCall(target.run, (input));
         uint256 value = 4321;
-        uint256 deadline = block.timestamp;
+        uint256 deadline = vm.getBlockTimestamp();
         (bytes32 r, bytes32 sv) = signCall(senderKey, target, data, value, 0, deadline);
 
         bytes memory returned =
@@ -56,7 +56,7 @@ contract CallerTest is Test {
 
     function testCallSignedRejectsExpiredDeadline() public {
         bytes memory data = abi.encodeCall(target.run, (1));
-        uint256 deadline = block.timestamp;
+        uint256 deadline = vm.getBlockTimestamp();
         skip(1);
         (bytes32 r, bytes32 sv) = signCall(senderKey, target, data, 0, 0, deadline);
 
@@ -66,7 +66,7 @@ contract CallerTest is Test {
 
     function testCallSignedRejectsInvalidNonce() public {
         bytes memory data = abi.encodeCall(target.run, (1));
-        uint256 deadline = block.timestamp;
+        uint256 deadline = vm.getBlockTimestamp();
         (bytes32 r, bytes32 sv) = signCall(senderKey, target, data, 0, 0, deadline);
         caller.callSigned(sender, address(target), data, deadline, r, sv);
         assertNonce(sender, 1);
@@ -77,7 +77,7 @@ contract CallerTest is Test {
 
     function testCallSignedRejectsInvalidSigner() public {
         bytes memory data = abi.encodeCall(target.run, (1));
-        uint256 deadline = block.timestamp;
+        uint256 deadline = vm.getBlockTimestamp();
         (bytes32 r, bytes32 sv) = signCall(senderKey + 1, target, data, 0, 0, deadline);
 
         vm.expectRevert(ERROR_SIGNATURE);
@@ -87,7 +87,7 @@ contract CallerTest is Test {
     function testCallSignedBubblesErrors() public {
         // Zero input triggers a revert in Target
         bytes memory data = abi.encodeCall(target.run, (0));
-        uint256 deadline = block.timestamp;
+        uint256 deadline = vm.getBlockTimestamp();
         (bytes32 r, bytes32 sv) = signCall(senderKey, target, data, 0, 0, deadline);
 
         vm.expectRevert(ERROR_ZERO_INPUT);

@@ -2,9 +2,13 @@
 solc_version = '0.8.20'
 evm_version = 'shanghai'
 optimizer_runs = 7_700
+via_ir = true
 verbosity = 1
 fuzz_runs = 5
 fs_permissions = [{ access = "read-write", path = "./"}]
+enable_eravm_extensions = true
+[profile.default.zksync]
+enable_eravm_extensions = true
 [fmt]
 line_length = 100
 [fuzz]
