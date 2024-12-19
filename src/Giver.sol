@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import {AddressDriver, Drips, IERC20} from "./AddressDriver.sol";
 import {IWrappedNativeToken} from "./IWrappedNativeToken.sol";
 import {Managed} from "./Managed.sol";
-import {CONTRACT_DEPLOYER} from "./ZkSyncUtils.sol";
+import {Create2} from "./ZkSyncUtils.sol"; 
 import {Clones} from "openzeppelin-contracts/proxy/Clones.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
@@ -78,7 +78,7 @@ contract GiversRegistry is Managed {
     /// @param deployer The address of the deployer of the `Giver` and its logic.
     /// @return giver_ The address of the `Giver`.
     function _giver(uint256 accountId, address deployer) internal view returns (address giver_) {
-        return CONTRACT_DEPLOYER.getNewAddressCreate2(deployer, giverCodeHash, bytes32(accountId), "");
+        return Create2.computeAddress(bytes32(accountId), giverCodeHash, keccak256(""), deployer);
     }
 
     /// @notice `give` to the account all the tokens held by the `Giver` assigned to that account.
@@ -91,7 +91,7 @@ contract GiversRegistry is Managed {
         address giver_ = giver(accountId);
         if (!Address.isContract(giver_)) {
             console.log("Will create2");
-            CONTRACT_DEPLOYER.create2(/* bytes32(accountId) */ "salty?", giverCodeHash, "");
+            Create2.deploy(0, bytes32(accountId), giverCodeHash, "");
             console.log("Did create2");
         }
         bytes memory delegateCalldata = abi.encodeCall(this.giveImpl, (accountId, erc20));

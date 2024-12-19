@@ -6,7 +6,7 @@ import {AddressDriver, Drips, IERC20, StreamReceiver} from "src/AddressDriver.so
 import {Address, Giver, GiversRegistry} from "src/Giver.sol";
 import {IWrappedNativeToken} from "src/IWrappedNativeToken.sol";
 import {ManagedProxy} from "src/Managed.sol";
-import {CONTRACT_DEPLOYER} from "src/ZkSyncUtils.sol";
+import {Create2} from "src/ZkSyncUtils.sol";
 import {
     ERC20,
     ERC20PresetFixedSupply
@@ -30,8 +30,13 @@ contract Logic {
 }
 
 contract GiverTest is Test {
-    Giver internal giver = new Giver();
-    address internal logic = address(new Logic());
+    Giver internal giver;
+    address internal logic;
+
+    function setUp() public {
+        giver = new Giver();
+        logic = address(new Logic());
+    }
 
     function testDelegate() public {
         uint256 arg = 1234;
@@ -47,9 +52,15 @@ contract GiverTest is Test {
     }
 
     function testDelegateRevertsForNonOwner() public {
-        vm.prank(address(1234));
+        Giver giver_ = new Giver();
+        address logic_ = address(new Logic());
+        console.log("Giver", address(giver_));
+        console.logBytes32(address(giver_).codehash);
+        console.log("Logic", logic_);
+        console.logBytes32(logic_.codehash);
+        vm.prank(address(bytes20("Non owner")));
         vm.expectRevert("Caller is not the owner");
-        giver.delegate(logic, "");
+        giver_.delegate(logic_, "");
     }
 
     function testTransferToGiver() public {
@@ -164,27 +175,6 @@ contract GiversRegistryTest is Test {
     }
 
     function testGiveZeroWrapped() public {
-        // console.log("Giver type bytecode");
-        // console.logBytes(type(Giver).creationCode);
-
-        // console.log("Giver type bytecode hash");
-        // bytes32 creationCodeHash = keccak256(type(Giver).creationCode);
-        // console.logBytes32(creationCodeHash);
-
-        // console.log("Giver contract bytecode");
-        bytes32 codeHash = address(new Giver()).codehash;
-        // console.logBytes32(codeHash);
-
-        Giver givr2 = Giver(payable(CONTRACT_DEPLOYER.create2("salty?", codeHash, "")));
-        console.log("Giver 2", address(givr2));
-        console.log("Giver 2 owner", givr2.owner());
-
-        console.log("Will a()");
-        Giver givr3 = new Lol().a();
-        console.log("Giver 3", address(givr3));
-        console.log("Giver 3 owner", givr3.owner());
-
-
         giveNative(0, 0);
     }
 
@@ -198,14 +188,5 @@ contract GiversRegistryTest is Test {
     function testGiveImplReverts() public {
         vm.expectRevert("Caller is not GiversRegistry");
         giversRegistry.giveImpl(accountId, erc20);
-    }
-}
-
-
-contract Lol {
-    function a() public returns (Giver) {
-        bytes32 codeHash = address(new Giver()).codehash;
-        console.log("Giver out");
-        return Giver(payable(CONTRACT_DEPLOYER.create2("salty?", codeHash, "")));
     }
 }

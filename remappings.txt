@@ -4,3 +4,4 @@ openzeppelin-contracts/=lib/openzeppelin-contracts/contracts/
 layer-zero-v2/=lib/LayerZero-v2/
 gelato-automate/=lib/gelato-automate/contracts/
 axelar/=lib/axelar-gmp-sdk-solidity/contracts/
+zksync/=lib/era-contracts/
