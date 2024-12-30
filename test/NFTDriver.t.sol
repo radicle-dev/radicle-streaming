@@ -197,7 +197,7 @@ contract NFTDriverTest is Test {
         uint128 amt = 5;
         driver.give(tokenId1, tokenId2, erc20, amt);
         drips.split(tokenId2, erc20, new SplitsReceiver[](0));
-        address transferTo = address(1234);
+        address transferTo = address(123456);
 
         uint128 collected = driver.collect(tokenId2, erc20, transferTo);
 
@@ -268,7 +268,7 @@ contract NFTDriverTest is Test {
         uint128 amt = 5;
         StreamReceiver[] memory receivers = new StreamReceiver[](0);
         driver.setStreams(tokenId, erc20, receivers, int128(amt), receivers, 0, 0, address(this));
-        address transferTo = address(1234);
+        address transferTo = address(123456);
 
         int128 realBalanceDelta =
             driver.setStreams(tokenId, erc20, receivers, -int128(amt), receivers, 0, 0, transferTo);

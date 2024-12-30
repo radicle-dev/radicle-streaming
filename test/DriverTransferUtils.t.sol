@@ -72,7 +72,7 @@ contract DriverTransferUtilsTest is Test {
     IERC20 internal erc20;
 
     uint256 accountId = 1;
-    address userAddr = address(1234);
+    address userAddr = address(123456);
 
     function setUp() public {
         Drips dripsLogic = new Drips(10);

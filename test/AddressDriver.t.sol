@@ -72,7 +72,7 @@ contract AddressDriverTest is Test {
         vm.prank(user);
         driver.give(thisId, erc20, amt);
         drips.split(thisId, erc20, new SplitsReceiver[](0));
-        address transferTo = address(1234);
+        address transferTo = address(123456);
 
         uint128 collected = driver.collect(erc20, transferTo);
 
@@ -131,7 +131,7 @@ contract AddressDriverTest is Test {
         uint128 amt = 5;
         StreamReceiver[] memory receivers = new StreamReceiver[](0);
         driver.setStreams(erc20, receivers, int128(amt), receivers, 0, 0, address(this));
-        address transferTo = address(1234);
+        address transferTo = address(123456);
 
         int128 realBalanceDelta =
             driver.setStreams(erc20, receivers, -int128(amt), receivers, 0, 0, transferTo);

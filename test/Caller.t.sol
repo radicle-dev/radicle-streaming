@@ -27,7 +27,7 @@ contract CallerTest is Test {
     uint256 internal senderKey;
     address internal sender;
 
-    constructor() {
+    function setUp() public {
         caller = new Caller();
         bytes32 nameHash = keccak256("Caller");
         bytes32 versionHash = keccak256("1");

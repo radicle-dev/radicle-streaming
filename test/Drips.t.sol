@@ -539,7 +539,7 @@ contract DripsTest is Test {
     }
 
     function testRegisterDriver() public {
-        address driverAddr = address(0x1234);
+        address driverAddr = address(123456);
         uint32 nextDriverId = drips.nextDriverId();
         assertEq(address(0), drips.driverAddress(nextDriverId), "Invalid unused driver address");
         assertEq(nextDriverId, drips.registerDriver(driverAddr), "Invalid assigned driver ID");
@@ -554,7 +554,7 @@ contract DripsTest is Test {
 
     function testUpdateDriverAddress() public {
         assertEq(driver, drips.driverAddress(driverId), "Invalid driver address before");
-        address newDriverAddr = address(0x1234);
+        address newDriverAddr = address(123456);
         vm.prank(driver);
         drips.updateDriverAddress(driverId, newDriverAddr);
         assertEq(newDriverAddr, drips.driverAddress(driverId), "Invalid driver address after");
@@ -562,7 +562,7 @@ contract DripsTest is Test {
 
     function testUpdateDriverAddressRevertsWhenNotCalledByTheDriver() public {
         vm.expectRevert(ERROR_NOT_DRIVER);
-        drips.updateDriverAddress(driverId, address(1234));
+        drips.updateDriverAddress(driverId, address(123456));
     }
 
     function testCollectRevertsWhenNotCalledByTheDriver() public {
@@ -745,10 +745,10 @@ contract DripsTest is Test {
     }
 
     function testRegisterDriverCanBePaused() public canBePausedTest {
-        drips.registerDriver(address(0x1234));
+        drips.registerDriver(address(123456));
     }
 
     function testUpdateDriverAddressCanBePaused() public canBePausedTest {
-        drips.updateDriverAddress(driverId, address(0x1234));
+        drips.updateDriverAddress(driverId, address(123456));
     }
 }

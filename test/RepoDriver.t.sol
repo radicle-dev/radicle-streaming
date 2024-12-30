@@ -204,23 +204,19 @@ contract RepoDriverTest is Test, Events {
 
         caller = new Caller();
 
-        address driverAddress =
-            vm.computeCreateAddress(address(this), vm.getNonce(address(this)) + 2);
-        Automate automate_ = new Automate();
-
         // Make RepoDriver's driver ID non-0 to test if it's respected by RepoDriver
         drips.registerDriver(address(1));
         drips.registerDriver(address(1));
-        uint32 driverId = drips.registerDriver(driverAddress);
 
+        Automate automate_ = new Automate();
         string memory ipfsCid = "Gelato Function";
         automate_.expectIpfsCid(ipfsCid);
         bytes memory data = abi.encodeCall(RepoDriver.updateGelatoTask, (ipfsCid, 0, 0));
 
         RepoDriver driverLogic =
-            new RepoDriver(drips, address(caller), driverId, IAutomate(address(automate_)));
+            new RepoDriver(drips, address(caller), drips.nextDriverId(), IAutomate(address(automate_)));
         driver = RepoDriver(payable(new ManagedProxy(driverLogic, admin, data)));
-        require(address(driver) == driverAddress, "Invalid driver address");
+        drips.registerDriver(address(driver));
 
         accountId = initialUpdateOwner("this/repo1", address(this));
         accountId1 = initialUpdateOwner("this/repo2", address(this));
@@ -570,7 +566,7 @@ contract RepoDriverTest is Test, Events {
         uint128 amt = 5;
         driver.give(accountId1, accountId2, erc20, amt);
         drips.split(accountId2, erc20, new SplitsReceiver[](0));
-        address transferTo = address(1234);
+        address transferTo = address(123456);
         uint128 collected = driver.collect(accountId2, erc20, transferTo);
         assertEq(collected, amt, "Invalid collected");
         assertEq(erc20.balanceOf(transferTo), amt, "Invalid balance");
@@ -629,7 +625,7 @@ contract RepoDriverTest is Test, Events {
         uint128 amt = 5;
         StreamReceiver[] memory receivers = new StreamReceiver[](0);
         driver.setStreams(accountId, erc20, receivers, int128(amt), receivers, 0, 0, address(this));
-        address transferTo = address(1234);
+        address transferTo = address(123456);
         int128 realBalanceDelta = driver.setStreams(
             accountId, erc20, receivers, -int128(amt), receivers, 0, 0, transferTo
         );

@@ -31,20 +31,25 @@ function buildCalls(address target, uint256 value, bytes memory data)
 }
 
 contract ExecuteCallsTest is Test {
-    address internal immutable target = address(new CallTarget());
-    address internal immutable eoa = address(0x1234);
+    address internal target;
+    address internal eoa;
+
+    function setUp() public {
+        target = address(new CallTarget());
+        eoa = address(123456);
+    }
 
     function executeCallsExternal(Call[] memory calls) external {
         executeCalls(calls);
     }
 
     function testCallsContract() public {
-        vm.expectCall(target, 3, "abcde", 1);
+        vm.expectCall(target, 3, "abcde", 2);
         this.executeCallsExternal(buildCalls(target, 3, "abcde"));
     }
 
     function testSendsValueToContract() public {
-        vm.expectCall(target, 3, "", 1);
+        vm.expectCall(target, 3, "", 2);
         this.executeCallsExternal(buildCalls(target, 3, ""));
     }
 
@@ -54,15 +59,15 @@ contract ExecuteCallsTest is Test {
     }
 
     function testSendsValueToEOA() public {
-        vm.expectCall(eoa, 3, "", 1);
+        vm.expectCall(eoa, 3, "", 2);
         this.executeCallsExternal(buildCalls(eoa, 3, ""));
     }
 
     function testExecutesMultipleCalls() public {
         Call[] memory calls = new Call[](2);
-        vm.expectCall(target, 3, "abcde", 1);
+        vm.expectCall(target, 3, "abcde", 2);
         calls[0] = buildCalls(target, 3, "abcde")[0];
-        vm.expectCall(eoa, 5, "", 1);
+        vm.expectCall(eoa, 5, "", 2);
         calls[1] = buildCalls(eoa, 5, "")[0];
         this.executeCallsExternal(calls);
     }
@@ -75,10 +80,11 @@ contract TestGovernor is Governor {
 }
 
 contract GovernorTest is Test {
-    address internal immutable target = address(new CallTarget());
+    address internal target;
     TestGovernor internal governor;
 
     function setUp() public {
+        target = address(new CallTarget());
         TestGovernor logic = new TestGovernor();
         governor = TestGovernor(payable(new GovernorProxy(logic, new Call[](0))));
     }
@@ -132,13 +138,14 @@ contract GovernorTest is Test {
 }
 
 contract LZBridgedGovernorTest is Test {
-    address internal immutable endpoint = address(0x1234);
+    address internal immutable endpoint = address(123456);
     uint32 internal immutable ownerEid = 1234;
     bytes32 internal immutable owner = "owner";
-    address internal immutable target = address(new CallTarget());
+    address internal target;
     LZBridgedGovernor internal governor;
 
     function setUp() public {
+        target = address(new CallTarget());
         LZBridgedGovernor logic = new LZBridgedGovernor(endpoint, ownerEid, owner);
         governor = LZBridgedGovernor(payable(new GovernorProxy(logic, new Call[](0))));
         vm.deal(endpoint, 100);
@@ -240,16 +247,16 @@ contract LZBridgedGovernorTest is Test {
 }
 
 contract AxelarBridgedGovernorTest is Test {
-    address internal immutable gateway = address(0x1234);
+    address internal immutable gateway = address(123456);
     string internal ownerChain = "owner chain";
-    // string internal immutable OWNER = "0x0123456789abcDEF0123456789abCDef01234567";
     string internal owner;
-    address internal immutable target = address(new CallTarget());
+    address internal target;
     AxelarBridgedGovernor internal governor;
 
     function setUp() public {
         address owner_ = 0x0123456789abcDEF0123456789abCDef01234567;
         owner = Strings.toHexString(owner_);
+        target = address(new CallTarget());
         AxelarBridgedGovernor logic =
             new AxelarBridgedGovernor(IAxelarGMPGateway(gateway), ownerChain, owner_);
         governor = AxelarBridgedGovernor(payable(new GovernorProxy(logic, new Call[](0))));
