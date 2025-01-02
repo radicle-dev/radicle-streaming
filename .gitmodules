@@ -13,6 +13,9 @@
 [submodule "lib/axelar-gmp-sdk-solidity"]
 	path = lib/axelar-gmp-sdk-solidity
 	url = https://github.com/axelarnetwork/axelar-gmp-sdk-solidity
+[submodule "lib/forge-zksync-std"]
+	path = lib/forge-zksync-std
+	url = https://github.com/Moonsong-Labs/forge-zksync-std
 [submodule "lib/era-contracts"]
 	path = lib/era-contracts
-	url = https://github.com/matter-labs/era-contracts
+	url = https://github.com/CodeSandwich/era-contracts

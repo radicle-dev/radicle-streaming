@@ -1,5 +1,6 @@
 ds-test/=lib/forge-std/lib/ds-test/src/
 forge-std/=lib/forge-std/src/
+forge-zksync-std/=lib/forge-zksync-std/src/
 openzeppelin-contracts/=lib/openzeppelin-contracts/contracts/
 layer-zero-v2/=lib/LayerZero-v2/
 gelato-automate/=lib/gelato-automate/contracts/
