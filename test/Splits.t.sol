@@ -12,8 +12,8 @@ contract SplitsTest is Test, Splits {
 
     // The ERC-20 token used in all helper functions
     IERC20 internal erc20 = defaultErc20;
-    IERC20 internal defaultErc20 = IERC20(address(1));
-    IERC20 internal otherErc20 = IERC20(address(2));
+    IERC20 internal defaultErc20 = IERC20(address(bytes20("defaultErc20")));
+    IERC20 internal otherErc20 = IERC20(address(bytes20("otherErc20")));
     uint256 internal accountId = 3;
     uint256 internal receiver = 4;
     uint256 internal receiver1 = 5;

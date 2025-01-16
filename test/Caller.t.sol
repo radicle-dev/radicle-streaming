@@ -171,22 +171,24 @@ contract CallerTest is Test {
     }
 
     function testUnauthorizeAllUnauthorizesAll() public {
-        authorize(sender, address(1));
-        authorize(sender, address(2));
+        address authorized1 = address(bytes20("authorized1"));
+        address authorized2 = address(bytes20("authorized2"));
+        authorize(sender, authorized1);
+        authorize(sender, authorized2);
 
         vm.prank(sender);
         caller.unauthorizeAll();
 
-        assertFalse(caller.isAuthorized(sender, address(1)), "UnauthorizeAll failed for address 1");
-        assertFalse(caller.isAuthorized(sender, address(2)), "UnauthorizeAll failed for address 2");
+        assertFalse(caller.isAuthorized(sender, authorized1), "UnauthorizeAll failed for authorized 1");
+        assertFalse(caller.isAuthorized(sender, authorized2), "UnauthorizeAll failed for authorized 2");
         assertEq(caller.allAuthorized(sender), new address[](0), "All authorized not empty");
         // Authorization still works
-        authorize(sender, address(1));
+        authorize(sender, authorized1);
         address[] memory allAuthorized = new address[](1);
-        allAuthorized[0] = address(1);
+        allAuthorized[0] = authorized1;
         assertEq(caller.allAuthorized(sender), allAuthorized, "Invalid all authorized");
         // Unauthorization still works
-        unauthorize(sender, address(1));
+        unauthorize(sender, authorized1);
     }
 
     function testCallAsBubblesErrors() public {

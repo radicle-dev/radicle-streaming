@@ -24,8 +24,8 @@ contract NFTDriverTest is Test {
     NFTDriver internal driver;
     IERC20 internal erc20;
 
-    address internal admin = address(1);
-    address internal user = address(2);
+    address internal admin = address(bytes20("admin"));
+    address internal user = address(bytes20("user"));
     uint256 internal tokenId;
     uint256 internal tokenId1;
     uint256 internal tokenId2;
@@ -197,7 +197,7 @@ contract NFTDriverTest is Test {
         uint128 amt = 5;
         driver.give(tokenId1, tokenId2, erc20, amt);
         drips.split(tokenId2, erc20, new SplitsReceiver[](0));
-        address transferTo = address(123456);
+        address transferTo = address(bytes20("recipient"));
 
         uint128 collected = driver.collect(tokenId2, erc20, transferTo);
 
@@ -268,7 +268,7 @@ contract NFTDriverTest is Test {
         uint128 amt = 5;
         StreamReceiver[] memory receivers = new StreamReceiver[](0);
         driver.setStreams(tokenId, erc20, receivers, int128(amt), receivers, 0, 0, address(this));
-        address transferTo = address(123456);
+        address transferTo = address(bytes20("recipient"));
 
         int128 realBalanceDelta =
             driver.setStreams(tokenId, erc20, receivers, -int128(amt), receivers, 0, 0, transferTo);

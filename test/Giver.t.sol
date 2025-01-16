@@ -76,7 +76,7 @@ contract GiversRegistryTest is Test {
     IERC20 internal erc20;
     IWrappedNativeToken internal wrappedNativeToken;
     GiversRegistry internal giversRegistry;
-    address internal admin = address(1);
+    address immutable internal admin = address(bytes20("admin"));
     uint256 internal accountId;
     address payable internal giver;
 

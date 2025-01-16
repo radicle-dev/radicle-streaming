@@ -25,9 +25,9 @@ contract ManagedTest is Test {
     Logic internal logic;
     Logic internal proxy;
 
-    address internal admin = address(1);
-    address internal pauser = address(2);
-    address internal user = address(3);
+    address internal admin = address(bytes20("admin"));
+    address internal pauser = address(bytes20("pauser"));
+    address internal user = address(bytes20("user"));
 
     bytes internal constant ERROR_NOT_ADMIN = "Caller not the admin";
     bytes internal constant ERROR_NOT_ADMIN_OR_PAUSER = "Caller not the admin or a pauser";

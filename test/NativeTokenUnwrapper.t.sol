@@ -20,7 +20,7 @@ contract WrappedNativeToken is ERC20("", ""), IWrappedNativeToken {
 contract NativeTokenUnwrapperTest is Test {
     WrappedNativeToken internal wrappedNativeToken;
     NativeTokenUnwrapper internal nativeTokenUnwrapper;
-    address payable immutable recipient = payable(address(123456));
+    address payable immutable recipient = payable(address(bytes20("recipient")));
 
     function setUp() public {
         wrappedNativeToken = new WrappedNativeToken();

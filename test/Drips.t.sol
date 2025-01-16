@@ -16,7 +16,7 @@ import {
     ERC20PresetFixedSupply
 } from "openzeppelin-contracts/token/ERC20/presets/ERC20PresetFixedSupply.sol";
 
-contract DripsTest is Test {
+contract DripsTestBase is Test {
     Drips internal drips;
     // The ERC-20 token used in all helper functions
     IERC20 internal erc20;
@@ -26,8 +26,8 @@ contract DripsTest is Test {
     mapping(uint256 accountId => mapping(IERC20 => StreamReceiver[])) internal currStreamsReceivers;
     mapping(uint256 accountId => SplitsReceiver[]) internal currSplitsReceivers;
 
-    address internal driver = address(1);
-    address internal admin = address(2);
+    address immutable internal driver = address(bytes20("driver"));
+    address immutable internal admin = address(bytes20("admin"));
 
     uint32 internal driverId;
 
@@ -384,7 +384,9 @@ contract DripsTest is Test {
     function assertDripsBalance(uint256 expected) internal {
         assertEq(dripsBalance(), expected, "Invalid Drips balance");
     }
+}
 
+contract DripsTest1 is DripsTestBase {
     function testDoesNotRequireReceiverToBeInitialized() public {
         receiveStreams(receiver, 0, 0);
         split(receiver, 0, 0);
@@ -539,7 +541,7 @@ contract DripsTest is Test {
     }
 
     function testRegisterDriver() public {
-        address driverAddr = address(123456);
+        address driverAddr = address(bytes20("otherDriver"));
         uint32 nextDriverId = drips.nextDriverId();
         assertEq(address(0), drips.driverAddress(nextDriverId), "Invalid unused driver address");
         assertEq(nextDriverId, drips.registerDriver(driverAddr), "Invalid assigned driver ID");
@@ -554,7 +556,7 @@ contract DripsTest is Test {
 
     function testUpdateDriverAddress() public {
         assertEq(driver, drips.driverAddress(driverId), "Invalid driver address before");
-        address newDriverAddr = address(123456);
+        address newDriverAddr = address(bytes20("otherDriver"));
         vm.prank(driver);
         drips.updateDriverAddress(driverId, newDriverAddr);
         assertEq(newDriverAddr, drips.driverAddress(driverId), "Invalid driver address after");
@@ -562,14 +564,16 @@ contract DripsTest is Test {
 
     function testUpdateDriverAddressRevertsWhenNotCalledByTheDriver() public {
         vm.expectRevert(ERROR_NOT_DRIVER);
-        drips.updateDriverAddress(driverId, address(123456));
+        drips.updateDriverAddress(driverId, address(bytes20("otherDriver")));
     }
 
     function testCollectRevertsWhenNotCalledByTheDriver() public {
         vm.expectRevert(ERROR_NOT_DRIVER);
         drips.collect(accountId, erc20);
     }
+}
 
+contract DripsTest2 is DripsTestBase {
     function testStreamsInDifferentTokensAreIndependent() public {
         uint32 cycleLength = drips.cycleSecs();
         // Covers 1.5 cycles of streaming
@@ -745,10 +749,10 @@ contract DripsTest is Test {
     }
 
     function testRegisterDriverCanBePaused() public canBePausedTest {
-        drips.registerDriver(address(123456));
+        drips.registerDriver(address(bytes20("otherDriver")));
     }
 
     function testUpdateDriverAddressCanBePaused() public canBePausedTest {
-        drips.updateDriverAddress(driverId, address(123456));
+        drips.updateDriverAddress(driverId, address(bytes20("otherDriver")));
     }
 }

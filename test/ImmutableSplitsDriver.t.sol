@@ -10,7 +10,7 @@ contract ImmutableSplitsDriverTest is Test {
     Drips internal drips;
     ImmutableSplitsDriver internal driver;
     uint32 internal totalSplitsWeight;
-    address internal admin = address(1);
+    address internal admin = address(bytes20("admin"));
 
     function setUp() public {
         Drips dripsLogic = new Drips(10);
