@@ -1337,6 +1337,8 @@ contract StreamsTest2 is StreamsTestBase {
         );
     }
 
+    // TODO test actually stream to countMax receivers across multiple cycles
+
     function testBenchSetStreams() public {
         initSeed(0);
         uint32 wrongHint1 = uint32(block.timestamp) + 1;

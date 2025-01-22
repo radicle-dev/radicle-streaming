@@ -170,6 +170,8 @@ contract SplitsTest is Test, Splits {
         assertSetSplitsReverts(accountId, receiversBad, "Too many splits receivers");
     }
 
+    // TODO test actually split to countMax receivers 
+
     function testRejectsTooHighTotalWeightSplitsReceivers() public {
         uint32 totalWeight = Splits._TOTAL_SPLITS_WEIGHT;
         setSplits(accountId, splitsReceivers(receiver, totalWeight));

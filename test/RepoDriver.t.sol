@@ -183,9 +183,11 @@ contract OpsProxyFactory is StdAssertions {
     }
 }
 
-contract GasLeft {
-    function gasLeft() public view returns (uint256) {
-        return gasleft();
+contract GasMeter {
+    function requestUpdateOwner(RepoDriver driver, Forge forge, bytes memory name) public returns (uint256 gasUsed) {
+        gasUsed = gasleft();
+        driver.requestUpdateOwner(forge, name);
+        gasUsed -= gasleft();
     }
 }
 
@@ -459,68 +461,35 @@ contract RepoDriverTest is Test, TestExt, Events {
         caller.callAs(user, address(driver), data);
     }
 
-    // function testContext() public {
-    //     console.log("SELF ", gasleft());
-    //     if(msg.sender != address(this)) return this.testContext();
-    //     this.otherContext();
-    //     console.log("OUTER", new RepoDriverTestContext().gg());
-    //     console.log("OUTER", new RepoDriverTestContext().gg());
-    // }
-
-    // function otherContext() public {
-    //     console.log("OTHER", gasleft());
-    // }
-
-    // function testRequestUpdateOwnerAppliesGasPenalty() public {
-    //     new RepoDriverTestContext().requestUpdateOwnerAppliesGasPenalty(driver);
-    // }
-
-    function gasLeft() public view returns (uint256) {
-        return gasleft();
-    }
-
-    function gasLimit() public view returns (uint256) {
-        return block.gaslimit;
-    }
-
-    function nottestRequestUpdateOwnerAppliesGasPenalty() public {
-        vmExt.zkVm(true);
+    function testRequestUpdateOwnerAppliesGasPenalty() public {
         string memory ipfsCid = "The new Gelato Function";
         automate().expectIpfsCid(ipfsCid);
         vm.prank(admin);
-        RepoDriverTestContext context = new RepoDriverTestContext();
+        // This is a ZKsync-specific equivalent of `block.gaslimit` and considered a constant.
+        uint256 maxGasPerTransaction = 80_000_000;
         // The penalty increase of 1/6 of the block gas results in maximum 3 requests per block.
         // Decrease of the penalty by 1 increase per day results in 31 requests per 31 days
         // on top of the 6 requests maxing out the penalty.
-        uint256 penaltyIncrease = context.blockGasLimit() / 6;
-        // uint256 penaltyIncrease = block.gaslimit / 6;
-        vm.prank(driver.admin());
+        uint256 penaltyIncrease = maxGasPerTransaction / 6;
         driver.updateGelatoTask(ipfsCid, 3, 31 + 6);
 
         // Move away from timestamp 0 by the time it takes to decrease the penalty by 1 increase.
         vm.warp(1 days);
-        context.requestWithGasPenalty(driver, 0 * penaltyIncrease);
-        console.log("Did 1");
-        context.requestWithGasPenalty(driver, 1 * penaltyIncrease);
-        console.log("Did 2");
-        context.requestWithGasPenalty(driver, 2 * penaltyIncrease);
-        console.log("Did 3");
+        requestWithGasPenalty(0 * penaltyIncrease);
+        requestWithGasPenalty(1 * penaltyIncrease);
+        requestWithGasPenalty(2 * penaltyIncrease);
         // Decrease the penalty by 2 increases.
         vm.warp(vm.getBlockTimestamp() + 2 days);
-        context.requestWithGasPenalty(driver, 1 * penaltyIncrease);
+        requestWithGasPenalty(1 * penaltyIncrease);
     }
 
-    // function requestWithGasPenalty(uint256 gasPenalty) internal {
-    //     assertApproxEqAbs(gasPenalty, driver.requestUpdateOwnerGasPenalty(), 1, "Invalid penalty");
-    //     GasLeft gasLeft = new GasLeft();
-    //     uint256 gasUsed = gasLeft.gasLeft();
-    //     driver.requestUpdateOwner(Forge.GitHub, "this/repo");
-    //     gasUsed -= gasLeft.gasLeft();
-    //     console.log("Gas used", gasUsed);
-    //     uint256 gasBase = 8_000;
-    //     uint256 gasDelta = 4_000;
-    //     assertApproxEqAbs(gasUsed, gasBase + gasPenalty, gasDelta, "Invalid applied penalty");
-    // }
+    function requestWithGasPenalty(uint256 gasPenalty) internal {
+        assertApproxEqAbs(gasPenalty, driver.requestUpdateOwnerGasPenalty(), 1, "Invalid penalty");
+        uint256 gasUsed = new GasMeter().requestUpdateOwner(driver, Forge.GitHub, "this/repo");
+        uint256 gasBase = 40_000;
+        uint256 gasDelta = 4_000;
+        assertApproxEqAbs(gasUsed, gasBase + gasPenalty, gasDelta, "Invalid applied penalty");
+    }
 
     function testReceivedNativeTokensAreAddedToCommonFunds() public {
         assertCommonFunds(0);
@@ -757,63 +726,6 @@ contract RepoDriverTest is Test, TestExt, Events {
 
     function testEmitAccountMetadataCanBePaused() public canBePausedTest {
         driver.emitAccountMetadata(0, noMetadata());
-    }
-}
-
-contract RepoDriverTestContext is Test {
-    // RepoDriverTest immutable internal test;
-
-    uint256 public blockGasLimit = block.gaslimit;
-
-    // constructor() {
-    //     blockGasLimit;
-    // }
-
-    // function blockGasLimit() public returns(uint256) {
-    //     return block.gaslimit;
-    // }
-
-    function requestUpdateOwnerAppliesGasPenalty(RepoDriver driver) public {
-        console.log("Hello");
-        string memory ipfsCid = "The new Gelato Function";
-        console.log("Hello?");
-        Automate(address(driver.gelatoAutomate())).expectIpfsCid(ipfsCid);
-        console.log("Hello!");
-        vm.prank(driver.admin());
-        console.log("A");
-        // The penalty increase of 1/6 of the block gas results in maximum 3 requests per block.
-        // Decrease of the penalty by 1 increase per day results in 31 requests per 31 days
-        // on top of the 6 requests maxing out the penalty.
-        uint256 penaltyIncrease = block.gaslimit / 6;
-        console.log("B");
-        driver.updateGelatoTask(ipfsCid, 3, 31 + 6);
-        console.log("C");
-
-        // Move away from timestamp 0 by the time it takes to decrease the penalty by 1 increase.
-        vm.warp(1 days);
-        requestWithGasPenalty(driver, 0 * penaltyIncrease);
-        requestWithGasPenalty(driver, 1 * penaltyIncrease);
-        requestWithGasPenalty(driver, 2 * penaltyIncrease);
-        // Decrease the penalty by 2 increases.
-        vm.warp(vm.getBlockTimestamp() + 2 days);
-        requestWithGasPenalty(driver, 1 * penaltyIncrease);
-    }
-
-    function requestWithGasPenalty(RepoDriver driver, uint256 gasPenalty) public {
-        console.log("Gas limit is", block.gaslimit);
-        console.log("start, gas penalty is", gasPenalty);
-        assertApproxEqAbs(gasPenalty, driver.requestUpdateOwnerGasPenalty(), 1, "Invalid penalty");
-        console.log("gasleft");
-        uint256 gasUsed = gasleft();
-        console.log("request update, gas left", gasUsed);
-        driver.requestUpdateOwner(Forge.GitHub, "this/repo");
-        gasUsed -= gasleft();
-        console.log("Gas used", gasUsed);
-        uint256 gasBase = 24_500;
-        uint256 gasDelta = 4_000;
-        console.log("checking");
-        assertApproxEqAbs(gasUsed, gasBase + gasPenalty, gasDelta, "Invalid applied penalty");
-        console.log("checked");
     }
 }
 

@@ -433,8 +433,10 @@ contract RepoDriver is DriverTransferUtils, Managed {
 
     /// @notice Calculates the gas cost penalty from the unitless penalty.
     /// @return gasPenalty The gas cost penalty.
-    function _penaltyToGas(uint72 penalty) internal view returns (uint256 gasPenalty) {
-        return block.gaslimit * penalty / MAX_PENALTY;
+    function _penaltyToGas(uint72 penalty) internal pure returns (uint256 gasPenalty) {
+        // This is a ZKsync-specific equivalent of `block.gaslimit` and considered a constant.
+        uint256 maxGasPerTransaction = 80_000_000;
+        return maxGasPerTransaction * penalty / MAX_PENALTY;
     }
 
     /// @notice Updates the account owner.
