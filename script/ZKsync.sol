@@ -17,7 +17,6 @@ import {
 import {nativeTokenUnwrapperModuleData} from "script/modules/NativeTokenUnwrapper.sol";
 import {nftDriverModuleData} from "script/modules/NFTDriver.sol";
 import {IAutomate, repoDriverModuleData} from "script/modules/RepoDriver.sol";
-import {deployCreate3Factory, ICreate3Factory} from "script/utils/Create3Factory.sol";
 import {writeDeploymentJson} from "script/utils/DeploymentJson.sol";
 import {
     addToProposalConfigInit, addToProposalGovernorMessage,
@@ -35,6 +34,8 @@ import {
     requireRunOnEthereum,
     WETH
 } from "script/utils/Radworks.sol";
+import {GovernorProxy} from "src/BridgedGovernor.sol";
+import {DEPLOYER_SYSTEM_CONTRACT} from "zksync/system-contracts/contracts/Constants.sol";
 
 IWrappedNativeToken constant WRAPPED_NATIVE_TOKEN =
     IWrappedNativeToken(0x5AEa5775959fBC2557Cc8789bC1bf90A239D9a91);
@@ -69,64 +70,93 @@ function radworksSetConfigParams() pure returns (SetConfigParam[] memory params)
 contract Deploy is Script {
     function run() public {
         require(block.chainid == 324, "Not running on ZKsync");
-        string memory salt;
         address radworks;
         if(vm.envOr("FINAL_RUN", false)) {
             require(msg.sender == 0x7dCaCF417BA662840DcD2A35b67f55911815dD7e, "Use the deployer wallet");
-            salt = "DripsV2Final";
             radworks = RADWORKS;
         } else {
-            salt = vm.envString("SALT");
             radworks = vm.envAddress("RADWORKS");
         }
 
         vm.startBroadcast();
-        ICreate3Factory create3Factory = deployCreate3Factory();
-        ModulesDeployer modulesDeployer =
-            deployModulesDeployer(create3Factory, bytes32(bytes(salt)), msg.sender);
+        ZKsyncDeployer deployer = new ZKsyncDeployer(msg.sender, radworks);
+        // writeDeploymentJson(vm, modulesDeployer, salt);
+    }
+}
 
-        address governor = lzBridgedGovernorAddress(modulesDeployer);
-        ModuleData[] memory modules = new ModuleData[](9);
-        modules[0] = lzBridgedGovernorModuleData({
-            modulesDeployer: modulesDeployer,
-            endpoint: ZKSYNC_ENDPOINT,
-            ownerEid: ETHEREUM_EID,
-            owner: radworks,
-            calls: governorConfigInitCalls({
+contract ZKsyncDeployer {
+    LZBridgedGovernor public immutable lzBridgedGovernor;
+
+    constructor(address sender, address radworks) {
+        require(sender == msg.sender, "lol");
+        address governor = DEPLOYER_SYSTEM_CONTRACT.getNewAddressCreate(address(this), 2);
+        {
+            LZBridgedGovernor logic = new LZBridgedGovernor(ZKSYNC_ENDPOINT, ETHEREUM_EID, bytes32(uint256(uint160(radworks))));
+            Call[] memory calls = governorConfigInitCalls({
                 endpoint: ZKSYNC_ENDPOINT,
                 governor: governor,
                 receiveUln: ZKSYNC_RECEIVE_ULN,
                 params: governorSetConfigParams()
-            })
-        });
-        modules[1] = callerModuleData(modulesDeployer);
-        modules[2] = dripsModuleData(modulesDeployer, governor, 1 days);
-        modules[3] = addressDriverModuleData(modulesDeployer, governor);
-        modulesDeployer.deployModules(modules);
+            });
+            lzBridgedGovernor = LZBridgedGovernor(payable(new GovernorProxy(logic, calls)));
+            require(governor == address(lzBridgedGovernor), "Unexpected governor address");
+        }
 
-        // modules = new ModuleData[](5);
-        modules[4] = nftDriverModuleData(modulesDeployer, governor);
-        modules[5] = immutableSplitsDriverModuleData(modulesDeployer, governor);
-        modules[6] = repoDriverModuleData({
-            modulesDeployer: modulesDeployer,
-            admin: governor,
-            // Taken from https://docs.gelato.network/web3-services/web3-functions/contract-addresses
-            gelatoAutomate: IAutomate(0xF27e0dfD58B423b1e1B90a554001d0561917602F),
-            // Deployed from https://github.com/drips-network/contracts-gelato-web3-function
-            ipfsCid: "QmeP5ETCt7bZLMtQeFRmJNm5mhYaGgM3GNvExQ4PP12whD",
-            // Calculated to saturate the Gelato free tier giving 200K GU.
-            // Assumes that each requests costs up to 11 GU (5 seconds of CPU + 1 transaction).
-            // The penalty-free throughput is 1 request per 3 minutes.
-            maxRequestsPerBlock: 80,
-            maxRequestsPer31Days: 18000
-        });
-        modules[7] = giversRegistryModuleData(modulesDeployer, governor, WRAPPED_NATIVE_TOKEN);
-        modules[8] = nativeTokenUnwrapperModuleData(modulesDeployer, WRAPPED_NATIVE_TOKEN);
-        modulesDeployer.deployModules(modules);
 
-        writeDeploymentJson(vm, modulesDeployer, salt);
+        // BridgeOwner memory bridgeOwner = BridgeOwner(ETHEREUM_EID, bytes32(uint256(uint160(radworks))));
+
+        // new LZBridgedGovernorModule(modulesDeployer, ZKSYNC_ENDPOINT, bridgeOwner, calls);
+
+        // constructor(
+        // ModulesDeployer modulesDeployer,
+        // address endpoint,
+        // BridgeOwner memory owner,
+        //     Call[] memory calls
+        // ) Module(modulesDeployer, LZ_BRIDGED_GOVERNOR_MODULE_SALT) {
+            // LZBridgedGovernor logic = new LZBridgedGovernor(ZKSYNC_ENDPOINT, owner.eid, owner.id);
+            // address proxy =
+            //     create3GovernorProxy(modulesDeployer, LZ_BRIDGED_GOVERNOR_SALT, logic, calls);
+            // lzBridgedGovernor = LZBridgedGovernor(payable(proxy));
+
+
+        // modules[0] = lzBridgedGovernorModuleData({
+        //     modulesDeployer: modulesDeployer,
+        //     endpoint: ZKSYNC_ENDPOINT,
+        //     ownerEid: ETHEREUM_EID,
+        //     owner: radworks,
+        //     calls: governorConfigInitCalls({
+        //         endpoint: ZKSYNC_ENDPOINT,
+        //         governor: governor,
+        //         receiveUln: ZKSYNC_RECEIVE_ULN,
+        //         params: governorSetConfigParams()
+        //     })
+        // });
+        // modules[1] = callerModuleData(modulesDeployer);
+        // modules[2] = dripsModuleData(modulesDeployer, governor, 1 days);
+        // modules[3] = addressDriverModuleData(modulesDeployer, governor);
+        // modulesDeployer.deployModules(modules);
+
+        // // modules = new ModuleData[](5);
+        // modules[4] = nftDriverModuleData(modulesDeployer, governor);
+        // modules[5] = immutableSplitsDriverModuleData(modulesDeployer, governor);
+        // modules[6] = repoDriverModuleData({
+        //     modulesDeployer: modulesDeployer,
+        //     admin: governor,
+        //     // Taken from https://docs.gelato.network/web3-services/web3-functions/contract-addresses
+        //     gelatoAutomate: IAutomate(0xF27e0dfD58B423b1e1B90a554001d0561917602F),
+        //     // Deployed from https://github.com/drips-network/contracts-gelato-web3-function
+        //     ipfsCid: "QmeP5ETCt7bZLMtQeFRmJNm5mhYaGgM3GNvExQ4PP12whD",
+        //     // Calculated to saturate the Gelato free tier giving 200K GU.
+        //     // Assumes that each requests costs up to 11 GU (5 seconds of CPU + 1 transaction).
+        //     // The penalty-free throughput is 1 request per 3 minutes.
+        //     maxRequestsPerBlock: 80,
+        //     maxRequestsPer31Days: 18000
+        // });
+        // modules[7] = giversRegistryModuleData(modulesDeployer, governor, WRAPPED_NATIVE_TOKEN);
+        // modules[8] = nativeTokenUnwrapperModuleData(modulesDeployer, WRAPPED_NATIVE_TOKEN);
     }
 }
+
 
 contract ProposeTestUpdate is Script{
     function run() public {
