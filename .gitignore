@@ -1,3 +1,7 @@
 node_modules
 /out
 /cache
+anvil-state
+deployment_*.json
+.DS_Store
+anvil-state.json
