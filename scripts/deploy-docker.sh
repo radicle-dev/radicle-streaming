@@ -2,7 +2,7 @@
 
 echo Deploying contracts to anvil...
 
-while ! grep -q "Listening on 0.0.0.0:8545" <(anvil --dump-state ./anvil-state.json --host 0.0.0.0); do
+while ! grep -q "Listening on 0.0.0.0:8545" <(anvil --chain-id 11166111 --dump-state ./anvil-state.json --host 0.0.0.0); do
   sleep 1
 done
 
