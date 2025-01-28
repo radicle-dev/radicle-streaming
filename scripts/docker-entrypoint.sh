@@ -13,4 +13,4 @@ printf "🪙 Address 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 has 100000000000
 
 printf "Starting testnet...\n\n"
 
-exec anvil --chain-id 11166111 --load-state ./anvil-state.json --host 0.0.0.0
+exec anvil --chain-id 11166111 --load-state ./anvil-state.json --host 0.0.0.0 --block-time 1
